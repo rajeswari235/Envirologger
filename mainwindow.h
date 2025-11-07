@@ -67,6 +67,11 @@ public:
 
     void initializeAllPlots();
 
+    void makePacket32UI(QList<QByteArray> &rawPacket32List);
+    void makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100AdxlList,QList<QByteArray> &rawPacketTemperatureList);
+    void makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList);
+
+
 private slots:
         void onPortSelected(const QString &portName);
 

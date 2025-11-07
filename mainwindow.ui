@@ -15,95 +15,18 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_3">
-    <item row="0" column="0">
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QPushButton" name="pushButton_calibrateScreen">
-        <property name="font">
-         <font>
-          <pointsize>10</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>Calibrate Screen</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QLabel" name="label">
-        <property name="font">
-         <font>
-          <pointsize>16</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>Envirologger</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QComboBox" name="comboBox_ports">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_portsRefresh">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Refresh</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
     <item row="1" column="0">
      <widget class="QTabWidget" name="tabWidget">
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+       </font>
+      </property>
       <property name="styleSheet">
-       <string notr="true"/>
+       <string notr="true">QTabBar::tab:selected {
+    background-color : rgb(132, 255, 130); 
+    color: rgb(0, 0, 0);
+}</string>
       </property>
       <property name="tabPosition">
        <enum>QTabWidget::North</enum>
@@ -127,6 +50,19 @@
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
+          <property name="styleSheet">
+           <string notr="true">QGroupBox {
+    border: 2px solid black;
+    border-radius: 10px;
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.9,
+        fx: 0.5, fy: 0.5,
+        stop: 0 rgba(57, 255, 20, 60),   /* brighter center */
+        stop: 1 rgba(57, 255, 20, 15)    /* fades softly to edges */
+    );
+}
+</string>
+          </property>
           <layout class="QGridLayout" name="gridLayout_2">
            <item row="0" column="0">
             <widget class="QCustomPlot" name="customPlot_adxl_x" native="true">
@@ -139,7 +75,7 @@
             </widget>
            </item>
            <item row="0" column="1">
-            <widget class="QCustomPlot" name="customPlot_temparature" native="true">
+            <widget class="QCustomPlot" name="customPlot_temperature" native="true">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                <horstretch>0</horstretch>
@@ -199,9 +135,27 @@
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
+          <property name="styleSheet">
+           <string notr="true">QGroupBox {
+    border: 2px solid black;
+    border-radius: 10px;
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.9,
+        fx: 0.5, fy: 0.5,
+        stop: 0 rgba(57, 255, 20, 60),   /* brighter center */
+        stop: 1 rgba(57, 255, 20, 15)    /* fades softly to edges */
+    );
+}
+</string>
+          </property>
           <layout class="QVBoxLayout" name="verticalLayout">
            <item>
             <widget class="QLineEdit" name="lineEdit_enterEventId">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="toolTip">
               <string>Enter Event Id Example  : 2</string>
              </property>
@@ -215,6 +169,11 @@
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_getEventData">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="text">
               <string>Get Event Data</string>
              </property>
@@ -235,6 +194,11 @@
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_stopPlot">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="text">
               <string>Stop Plot</string>
              </property>
@@ -255,6 +219,11 @@
            </item>
            <item>
             <widget class="QLabel" name="label_2">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="text">
               <string>Event Id</string>
              </property>
@@ -262,6 +231,11 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_eventId">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="readOnly">
               <bool>true</bool>
              </property>
@@ -282,6 +256,11 @@
            </item>
            <item>
             <widget class="QLabel" name="label_3">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="text">
               <string>Start Time</string>
              </property>
@@ -289,8 +268,19 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_startTime">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="toolTip">
+              <string>hh:mm:ss _dd/mm/yy</string>
+             </property>
              <property name="readOnly">
               <bool>true</bool>
+             </property>
+             <property name="placeholderText">
+              <string/>
              </property>
             </widget>
            </item>
@@ -309,6 +299,11 @@
            </item>
            <item>
             <widget class="QLabel" name="label_4">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
              <property name="text">
               <string>End Time</string>
              </property>
@@ -316,6 +311,14 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_endTime">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="toolTip">
+              <string>hh:mm:ss _dd/mm/yy</string>
+             </property>
              <property name="readOnly">
               <bool>true</bool>
              </property>
@@ -372,6 +375,116 @@
          </property>
          <property name="text">
           <string>Clear</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="0" column="0">
+     <widget class="QGroupBox" name="groupBox_title">
+      <property name="styleSheet">
+       <string notr="true">QGroupBox {
+    border: 2px solid black;
+    border-radius: 10px;
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.9,
+        fx: 0.5, fy: 0.5,
+        stop: 0 rgba(57, 255, 20, 60),   /* brighter center */
+        stop: 1 rgba(57, 255, 20, 15)    /* fades softly to edges */
+    );
+}
+</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QPushButton" name="pushButton_calibrateScreen">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Calibrate Screen</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="font">
+          <font>
+           <pointsize>16</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="text">
+          <string>Envirologger</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QComboBox" name="comboBox_ports">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_portsRefresh">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="text">
+          <string>Refresh</string>
          </property>
         </widget>
        </item>

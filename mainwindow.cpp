@@ -291,47 +291,320 @@ void MainWindow::initializeAllPlots()
         plot->replot();
     };
 
-    //  Graph color themes — bright on dark
+    //  Graph color themes — tuned for neon-green background
     QColor adxlColors[] = {
-        QColor(0, 255, 255),   // Cyan
-        QColor(0, 180, 255),   // Electric Blue
-        QColor(0, 255, 100)    // Neon Green
+        QColor(255, 60, 60),    // ADXL X - Bright Red
+        QColor(255, 180, 0),    // ADXL Y - Deep Amber
+        QColor(120, 180, 255)   // ADXL Z - Soft Sky Blue
     };
+
     QColor inclinometerColors[] = {
-        QColor(255, 80, 180),  // Magenta
-        QColor(255, 200, 80)   // Amber
+        QColor(255, 100, 255),  // Inclinometer X - Vivid Magenta
+        QColor(0, 255, 220)     // Inclinometer Y - Aqua Cyan
     };
-    QColor tempColor(255, 70, 70); // Bright red for temperature
+
+    QColor tempColor(255, 255, 100); // Temperature - Bright Yellow
+
 
     //  ADXL X, Y, Z — voltages vs samples (1 unit = 100 ms)
     setupPlot(ui->customPlot_adxl_x, "ADXL X Time (1 = 100 ms)", "Voltage (V)");
     setupPlot(ui->customPlot_adxl_y, "ADXL Y Time (1 = 100 ms)", "Voltage (V)");
     setupPlot(ui->customPlot_adxl_z, "ADXL Z Time (1 = 100 ms)", "Voltage (V)");
 
-    ui->customPlot_adxl_x->addGraph(); ui->customPlot_adxl_x->graph(0)->setPen(QPen(adxlColors[0], 2));
-    ui->customPlot_adxl_y->addGraph(); ui->customPlot_adxl_y->graph(0)->setPen(QPen(adxlColors[1], 2));
-    ui->customPlot_adxl_z->addGraph(); ui->customPlot_adxl_z->graph(0)->setPen(QPen(adxlColors[2], 2));
+    ui->customPlot_adxl_x->addGraph(); ui->customPlot_adxl_x->graph(0)->setPen(QPen(adxlColors[0], 1));
+    ui->customPlot_adxl_y->addGraph(); ui->customPlot_adxl_y->graph(0)->setPen(QPen(adxlColors[1], 1));
+    ui->customPlot_adxl_z->addGraph(); ui->customPlot_adxl_z->graph(0)->setPen(QPen(adxlColors[2], 1));
 
     //  Inclinometer X, Y — degrees vs time (1 unit = 1 ms)
     setupPlot(ui->customPlot_inclinometer_x, "Inclinometer Time X (ms)", "Degrees (°)");
     setupPlot(ui->customPlot_inclinometer_y, "Inclinometer Time Y (ms)", "Degrees (°)");
 
-    ui->customPlot_inclinometer_x->addGraph(); ui->customPlot_inclinometer_x->graph(0)->setPen(QPen(inclinometerColors[0], 2));
-    ui->customPlot_inclinometer_y->addGraph(); ui->customPlot_inclinometer_y->graph(0)->setPen(QPen(inclinometerColors[1], 2));
+    ui->customPlot_inclinometer_x->addGraph(); ui->customPlot_inclinometer_x->graph(0)->setPen(QPen(inclinometerColors[0], 1));
+    ui->customPlot_inclinometer_y->addGraph(); ui->customPlot_inclinometer_y->graph(0)->setPen(QPen(inclinometerColors[1], 1));
 
     //  Temperature — Celsius vs samples
-    setupPlot(ui->customPlot_temparature, "Samples", "Temperature (°C)");
-    ui->customPlot_temparature->addGraph(); ui->customPlot_temparature->graph(0)->setPen(QPen(tempColor, 2));
+    setupPlot(ui->customPlot_temperature, "Samples", "Temperature (°C)");
+    ui->customPlot_temperature->addGraph(); ui->customPlot_temperature->graph(0)->setPen(QPen(tempColor, 1.1));
 
     // Axis ranges start clean
     for (auto plot : {ui->customPlot_adxl_x, ui->customPlot_adxl_y, ui->customPlot_adxl_z,
                       ui->customPlot_inclinometer_x, ui->customPlot_inclinometer_y,
-                      ui->customPlot_temparature})
+                      ui->customPlot_temperature})
     {
         plot->xAxis->setRange(0, 100);
         plot->yAxis->setRange(-5, 5);
         plot->replot();
     }
+}
+
+void MainWindow::makePacket32UI(QList<QByteArray> &rawPacket32List)
+{
+    if(rawPacket32List.size() == 1)
+    {
+        QByteArray Item1 = rawPacket32List[0];
+        qDebug()<<Item1.toHex(' ').toUpper();
+
+        // Extracting eventId
+        quint8 highByte = static_cast<quint8>(Item1[2]);
+        quint8 lowByte  = static_cast<quint8>(Item1[3]);
+
+        quint16 eventId = (highByte << 8) | lowByte;
+
+        ui->lineEdit_eventId->setText(QString::number(eventId));
+
+        ui->lineEdit_eventId->setStyleSheet("background-color:yellow");
+
+        QTimer::singleShot(500,[this](){
+            ui->lineEdit_eventId->setStyleSheet("");
+        });
+
+        //Extracting Start Time and End Time
+
+        // Bytes extraction
+        QByteArray startTimeBytes = Item1.mid(20,6);
+        QByteArray endTimeBytes = Item1.mid(26,6);
+
+        // Bytes to Decimals conversion
+        QVector<quint8> startTimeDecimals;
+        for(auto eachByte : startTimeBytes)
+        {
+            startTimeDecimals.append(static_cast<quint8>(eachByte));
+        }
+        qDebug()<<startTimeDecimals<<" :startTimeDecimals";
+
+        QVector<quint8> endTimeDecimals;
+        for(auto eachByte : endTimeBytes)
+        {
+            endTimeDecimals.append(static_cast<quint8>(eachByte));
+        }
+        qDebug()<<endTimeDecimals<<" :endTimeDecimals";
+
+        // Decimals to string conversion
+        QStringList startTimeStringList;
+        for(auto parts : startTimeDecimals)
+        {
+            startTimeStringList.append(QString::number(parts));
+        }
+
+        QString uiStartTime = startTimeStringList.join(":");
+        qDebug()<<uiStartTime<<" :uiStartTime";
+
+        QStringList endTimeStringList;
+        for(auto parts : endTimeDecimals)
+        {
+            endTimeStringList.append(QString::number(parts));
+        }
+
+        QString uiEndTime = endTimeStringList.join(":");
+        qDebug()<<uiEndTime<<" :uiEndTime";
+
+        // Formatting the strings
+        // Split the string by ':'
+        QStringList startParts = uiStartTime.split(":");
+        QStringList endParts   = uiEndTime.split(":");
+
+        if (startParts.size() == 6 && endParts.size() == 6)
+        {
+            QString formattedStart = QString("%1:%2:%3_%4/%5/%6")
+                    .arg(startParts[0]).arg(startParts[1]).arg(startParts[2])
+                    .arg(startParts[3]).arg(startParts[4]).arg(startParts[5]);
+
+            QString formattedEnd = QString("%1:%2:%3_%4/%5/%6")
+                    .arg(endParts[0]).arg(endParts[1]).arg(endParts[2])
+                    .arg(endParts[3]).arg(endParts[4]).arg(endParts[5]);
+
+            qDebug() << formattedStart << " :formattedStart";
+            qDebug() << formattedEnd   << " :formattedEnd";
+
+            ui->lineEdit_startTime->setText(formattedStart);
+            ui->lineEdit_endTime->setText(formattedEnd);
+
+            // Ui blinking
+            ui->lineEdit_startTime->setStyleSheet("background-color:yellow");
+
+            QTimer::singleShot(500,[this](){
+                ui->lineEdit_startTime->setStyleSheet("");
+            });
+
+            ui->lineEdit_endTime->setStyleSheet("background-color:yellow");
+
+            QTimer::singleShot(500,[this](){
+                ui->lineEdit_endTime->setStyleSheet("");
+            });
+
+        }
+        else
+        {
+            qDebug() << "Invalid time format!";
+        }
+    }
+    else
+    {
+       QMessageBox::warning(this,"Error","packet32List size is more than 1");
+    }
+}
+
+void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100AdxlList,
+                                            QList<QByteArray> &rawPacketTemperatureList)
+{
+    QVector<double> sampleIndex;
+    QVector<double> xAdxl, yAdxl, zAdxl;
+    int globalSample = 0;
+
+    // --- ADXL Data Processing ---
+    for (int p = 0; p < rawPacket4100AdxlList.size(); ++p)
+    {
+        QByteArray packet = rawPacket4100AdxlList[p];
+
+        if (packet.size() < 20)
+        {
+            qDebug() << "Skipping too short ADXL packet:" << packet.size();
+            continue;
+        }
+
+        QByteArray trimmed = packet.mid(3);
+        if (trimmed.size() > 3) trimmed.chop(3); // remove footer
+        if (trimmed.size() > 2) trimmed.chop(2); // remove temperature bytes
+
+        int usableSize = trimmed.size();
+        if (usableSize < 6)
+        {
+            qDebug() << "Packet too short after trimming:" << usableSize;
+            continue;
+        }
+
+        for (int i = 0; i + 5 < usableSize; i += 6)
+        {
+            qint16 xRaw = (static_cast<quint8>(trimmed[i])     << 8) | static_cast<quint8>(trimmed[i + 1]);
+            qint16 yRaw = (static_cast<quint8>(trimmed[i + 2]) << 8) | static_cast<quint8>(trimmed[i + 3]);
+            qint16 zRaw = (static_cast<quint8>(trimmed[i + 4]) << 8) | static_cast<quint8>(trimmed[i + 5]);
+
+            sampleIndex.append(globalSample++);
+            xAdxl.append((xRaw * 3.3) / 4096.0);
+            yAdxl.append((yRaw * 3.3) / 4096.0);
+            zAdxl.append((zRaw * 3.3) / 4096.0);
+        }
+
+        qDebug() << "Processed ADXL packet" << p << ", extracted" << usableSize / 6 << "samples";
+    }
+
+    qDebug() << "Total ADXL samples:" << sampleIndex.size();
+
+    // --- Temperature Data Processing ---
+    QVector<double> tempIndex;
+    QVector<double> temperatureValues;
+
+    for (int i = 0; i < rawPacketTemperatureList.size(); ++i)
+    {
+        QByteArray tempBytes = rawPacketTemperatureList[i];
+        if (tempBytes.size() < 2)
+        {
+            qDebug() << "Skipping short temperature packet:" << tempBytes.size();
+            continue;
+        }
+
+        quint16 tempRaw = (static_cast<quint8>(tempBytes[0]) << 8) | static_cast<quint8>(tempBytes[1]);
+        tempIndex.append(i);
+        temperatureValues.append(-46.85 + (175.72 * tempRaw) / 65536.0);
+    }
+
+    qDebug() << "Total temperature samples:" << temperatureValues.size();
+
+    // --- Plotting Helper ---
+    auto plotGraph = [](QCustomPlot *plot, const QVector<double> &x, const QVector<double> &y)
+    {
+        if (plot->graphCount() > 0)
+        {
+            plot->graph(0)->setData(x, y);
+            plot->rescaleAxes();
+            plot->replot();
+        }
+    };
+
+    // --- Plot ADXL ---
+    plotGraph(ui->customPlot_adxl_x, sampleIndex, xAdxl);
+    plotGraph(ui->customPlot_adxl_y, sampleIndex, yAdxl);
+    plotGraph(ui->customPlot_adxl_z, sampleIndex, zAdxl);
+
+    // --- Plot Temperature ---
+    plotGraph(ui->customPlot_temperature, tempIndex, temperatureValues);
+}
+
+void MainWindow::makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList)
+{
+    QVector<double> sampleIndex;
+    QVector<double> inclX, inclY;
+    int globalSample = 0;
+
+    for (int p = 0; p < rawPacket4100InclList.size(); ++p)
+    {
+        QByteArray packet = rawPacket4100InclList[p];
+
+        if (packet.size() < 20)
+        {
+            qDebug() << "Skipping too short Inclinometer packet:" << packet.size();
+            continue;
+        }
+
+        // Remove header (3 bytes)
+        QByteArray trimmed = packet.mid(3);
+
+        // Remove footer (3 bytes)
+        if (trimmed.size() > 3)
+            trimmed.chop(3);
+
+        // Remove last 2 dummy bytes before footer
+        if (trimmed.size() > 2)
+            trimmed.chop(2);
+
+        int usableSize = trimmed.size();
+        if (usableSize < 4)
+        {
+            qDebug() << "Packet too short after trimming:" << usableSize;
+            continue;
+        }
+
+        // Process each 4-byte sample (Xg, Yg)
+        for (int i = 0; i + 3 < usableSize; i += 4)
+        {
+            qint16 xRaw = (static_cast<quint8>(trimmed[i + 1])     << 8) | static_cast<quint8>(trimmed[i]);
+            qint16 yRaw = (static_cast<quint8>(trimmed[i + 3]) << 8) | static_cast<quint8>(trimmed[i + 2]);
+
+            // Convert to g-values
+            double xg = (xRaw * 0.031) / 1000.0;
+            double yg = (yRaw * 0.031) / 1000.0;
+
+            // Clamp to [-1, 1]
+            xg = std::max(-1.0, std::min(1.0, xg));
+            yg = std::max(-1.0, std::min(1.0, yg));
+
+            // Convert to degrees
+            double xDeg = std::asin(xg) * (180.0 / M_PI);
+            double yDeg = std::asin(yg) * (180.0 / M_PI);
+
+            sampleIndex.append(globalSample++);
+            inclX.append(xDeg);
+            inclY.append(yDeg);
+        }
+
+        qDebug() << "Processed Incl packet" << p << ", extracted" << usableSize / 4 << "samples";
+    }
+
+    qDebug() << "Total Incl samples:" << sampleIndex.size();
+
+    // --- Plotting ---
+    auto plotGraph = [](QCustomPlot *plot, const QVector<double> &x, const QVector<double> &y)
+    {
+        if (plot->graphCount() > 0)
+        {
+            plot->graph(0)->setData(x, y);
+            plot->rescaleAxes();
+            plot->replot();
+        }
+    };
+
+    plotGraph(ui->customPlot_inclinometer_x, sampleIndex, inclX);
+    plotGraph(ui->customPlot_inclinometer_y, sampleIndex, inclY);
 }
 
 
@@ -411,18 +684,19 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
 
 
                             int fIndex = specialPacket.indexOf(QByteArray::fromHex("FF FF FF FF FF FF"));
-                            qDebug()<<fIndex;
+                            qDebug()<<fIndex<<" :fIndex";
 
-                            int footerIndex = specialPacket.indexOf(QByteArray::fromHex("FF EE FF"));
-                            qDebug()<<footerIndex;
+                            qDebug()<< "Removing ff bytes count: " << (specialPacket.size() - fIndex) - 5;
+                            writeToNotes("Removing ff bytes count: " + QString::number((specialPacket.size() - fIndex) - 5));
 
-                            specialPacket.remove(fIndex,footerIndex - 2);
+                            specialPacket.remove(fIndex,(specialPacket.size() - fIndex) - 5);
+
+
                             packet4100AdxlList.append(specialPacket);
                             qDebug()<<specialPacket.toHex(' ').toUpper()<<" :specialPacket";
 
                             // writeToNotes Log
                             writeToNotes("fIndex (start of FFs): " + QString::number(fIndex));
-                            writeToNotes("footerIndex (footer start): " + QString::number(footerIndex));
                             writeToNotes("specialPacket: " + specialPacket.toHex(' ').toUpper());
                         }
                         else
@@ -500,6 +774,12 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         writeToNotes("Invalid headers: " + QString::number(invalidHeaderCount));
 
         writeToNotes("Temperature sample[146]: " + packetTemperatureList.at(146).toHex(' ').toUpper());
+
+        //Making Packets
+        makePacket32UI(packet32List);
+        makePacket4100AdxlTempList(packet4100AdxlList,packetTemperatureList);
+        makePacket4100InclList(packet4100InclList);
+
     }
 }
 
