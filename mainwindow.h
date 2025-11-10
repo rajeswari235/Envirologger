@@ -56,7 +56,7 @@ public:
     void elapseStart();
     void elapseEnd(bool goFurther = false, const QString &label = "");
 
-    QDialog *createPleaseWaitDialog(const QString &text);
+    QDialog* createPleaseWaitDialog(const QString &text, int timeSeconds = 0);
 
     inline void pauseFor(int milliseconds) {
         QEventLoop loop;
@@ -89,6 +89,10 @@ private slots:
 
         void on_pushButton_getEventData_clicked();
 
+        void on_pushButton_startLog_clicked();
+
+        void on_pushButton_getLogEvents_clicked();
+
 signals:
     void sendMsgId(quint8 id);
 
@@ -105,6 +109,8 @@ private:
 
     //Extras
      QElapsedTimer elapsedTimer;
+
+     QDialog *dlg;
 
 };
 #endif // MAINWINDOW_H

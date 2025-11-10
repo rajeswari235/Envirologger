@@ -212,34 +212,73 @@ void MainWindow::elapseEnd(bool goFurther, const QString &label)
         elapsedTimer.restart();
 }
 
-QDialog* MainWindow::createPleaseWaitDialog(const QString &text)
+QDialog* MainWindow::createPleaseWaitDialog(const QString &text, int timeSeconds)
 {
-    QDialog *dlg = new QDialog(this);  // Create a QDialog with MainWindow as parent
+    // --- Create dialog ---
+    QDialog *dlg = new QDialog(this);
     dlg->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
-    dlg->setAttribute(Qt::WA_DeleteOnClose);  // Auto-delete when closed
-    dlg->setModal(true);  // Prevent interaction with the rest of the UI
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setModal(true);
 
+    // --- Styling ---
     dlg->setStyleSheet(R"(
-        QDialog { background-color: #f8f8f8; border: 2px solid #0078D7; border-radius: 8px; }
-        QLabel { font-size: 16px; padding: 20px; }
+        QDialog {
+            background-color: #f8f8f8;
+            border: 2px solid #0078D7;
+            border-radius: 8px;
+        }
+        QLabel {
+            font-size: 16px;
+            padding: 10px;
+        }
     )");
 
-    QVBoxLayout *layout = new QVBoxLayout(dlg);  // Layout for vertical arrangement
-    layout->addWidget(new QLabel(text));         // Message shown in the dialog
+    // --- Layout and main label ---
+    QVBoxLayout *layout = new QVBoxLayout(dlg);
+    QLabel *mainLabel = new QLabel(text, dlg);
+    layout->addWidget(mainLabel);
 
-    dlg->setLayout(layout);         // Apply layout
-    dlg->adjustSize();              // Resize dialog based on content
-    dlg->setFixedSize(dlg->sizeHint());  // Fix size to avoid resizing by user
+    QLabel *timerLabel = nullptr;
 
-    dlg->show();                    // Show the dialog
-    QApplication::processEvents(); // Force the event loop to process so it appears immediately
+    // --- Optional countdown ---
+    if (timeSeconds > 0)
+    {
+        timerLabel = new QLabel(QString("Remaining: %1s").arg(timeSeconds), dlg);
+        timerLabel->setAlignment(Qt::AlignCenter);
+        timerLabel->setStyleSheet("color: #0078D7; font-weight: bold;");
+        layout->addWidget(timerLabel);
 
-    return dlg;  // Return the pointer so you can manually close/delete it later
+        QTimer *countdown = new QTimer(dlg);
+        countdown->setInterval(1000);
 
-//    Using of this function
-//    QDialog *dlg = createPleaseWaitDialog("⏳ Please Wait ...");
-    //    dlg->close();
+        int *remaining = new int(timeSeconds);
+
+        QObject::connect(countdown, &QTimer::timeout, dlg, [countdown, remaining, timerLabel]() {
+            (*remaining)--;
+            if (*remaining <= 0)
+            {
+                countdown->stop();
+                delete remaining;
+            }
+            else
+            {
+                timerLabel->setText(QString("Remaining: %1s").arg(*remaining));
+            }
+        });
+
+        countdown->start();
+    }
+
+    dlg->setLayout(layout);
+    dlg->adjustSize();
+    dlg->setFixedSize(dlg->sizeHint());
+    dlg->show();
+
+    QApplication::processEvents(); // ensures dialog appears immediately
+
+    return dlg;
 }
+
 
 void MainWindow::initializeAllPlots()
 {
@@ -634,6 +673,7 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
 {
     QByteArray data = byteArrayData;
 
+    // Get Event Data Command mdgId 0x01
     if(data.startsWith(QByteArray::fromHex("AA BB")) && data.endsWith(QByteArray::fromHex("AA BB CC DD FF")))
     {
         int i = 0;
@@ -764,7 +804,10 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         qDebug() << " Temperature samples:" << packetTemperatureList.size();
         qDebug() << " Invalid headers:" << invalidHeaderCount;
 
-        qDebug()<<" Temparature samples list at 146: "<<packetTemperatureList.at(146).toHex(' ').toUpper();
+        if(!packetTemperatureList.isEmpty())
+        {
+            qDebug()<<" Temparature samples list at 146: "<<packetTemperatureList.at(146).toHex(' ').toUpper();
+        }
 
         // writeToNotes log
         writeToNotes("Packet32 count: " + QString::number(packet32List.size()));
@@ -773,7 +816,10 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         writeToNotes("Temperature samples: " + QString::number(packetTemperatureList.size()));
         writeToNotes("Invalid headers: " + QString::number(invalidHeaderCount));
 
-        writeToNotes("Temperature sample[146]: " + packetTemperatureList.at(146).toHex(' ').toUpper());
+        if(!packetTemperatureList.isEmpty())
+        {
+            writeToNotes("Temperature sample[146]: " + packetTemperatureList.at(146).toHex(' ').toUpper());
+        }
 
         //Making Packets
         makePacket32UI(packet32List);
@@ -781,6 +827,115 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         makePacket4100InclList(packet4100InclList);
 
     }
+    // Get Event Data Command Nack Condition mdgId 0x01
+    else if(data.startsWith(QByteArray::fromHex("53 54 45 FF")))
+    {
+        QMessageBox::warning(this,"Error","Invalid Event Id");
+        writeToNotes(" ### Invalid Event Id ###");
+    }
+
+    // Start Log Initial Command msgId 0x02
+    else if(data.startsWith(QByteArray::fromHex("54 53 41 43 4B")))
+    {
+        dlg = createPleaseWaitDialog("⌛ Please Wait Data Logging ...",10);
+        QTimer::singleShot(12000,[this](){
+            if(dlg)
+            {
+                dlg->close();
+                dlg = nullptr;
+                QMessageBox::critical(this,"Failed","Failed To Log Data !");
+            }
+        });
+    }
+
+    // Start Log End Initial Command msgId 0x02
+    else if(data.startsWith(QByteArray::fromHex("54 53 50")))
+    {
+        if(dlg)
+        {
+            dlg->close();
+            dlg = nullptr;
+            QMessageBox::information(this,"Success","Successfully data logged !");
+        }
+    }
+
+    // Get Log Events Command msgId 0x03
+    else if (data.startsWith(QByteArray::fromHex("AA BB")) && data.size() == 4096)
+    {
+        QByteArray logData = data;
+        int packetSize = 32;
+        int totalPackets = logData.size() / packetSize;
+
+        // --- Clear table first ---
+        ui->tableWidget_getLogEvents->clear();
+        ui->tableWidget_getLogEvents->setRowCount(0);
+        ui->tableWidget_getLogEvents->setColumnCount(3);
+        ui->tableWidget_getLogEvents->setHorizontalHeaderLabels(QStringList() << "Event ID" << "Start Time" << "End Time");
+
+        int validCount = 0;
+
+        for (int i = 0; i < totalPackets; ++i)
+        {
+            QByteArray packet = logData.mid(i * packetSize, packetSize);
+
+            // Stop processing if this packet is all FFs (padding)
+            if (packet.count(char(0xFF)) == packetSize)
+                break;
+
+            // --- Check header ---
+            if (!packet.startsWith(QByteArray::fromHex("AA BB")))
+                continue;
+
+            // --- Extract Event ID ---
+            quint8 msb = static_cast<quint8>(packet[2]);
+            quint8 lsb = static_cast<quint8>(packet[3]);
+            quint16 eventId = (msb << 8) | lsb;
+
+            // --- Extract Start Time (6 bytes: hh mm ss dd mm yy) ---
+            QByteArray startTimeBytes = packet.mid(20, 6);
+            QStringList startParts;
+            for (auto b : startTimeBytes)
+                startParts.append(QString::number(static_cast<quint8>(b)).rightJustified(2, '0'));
+
+            QString formattedStart = QString("%1:%2:%3 %4/%5/%6")
+                .arg(startParts[0]).arg(startParts[1]).arg(startParts[2])
+                .arg(startParts[3]).arg(startParts[4]).arg(startParts[5]);
+
+            // --- Extract End Time (6 bytes: hh mm ss dd mm yy) ---
+            QByteArray endTimeBytes = packet.mid(26, 6);
+            QStringList endParts;
+            for (auto b : endTimeBytes)
+                endParts.append(QString::number(static_cast<quint8>(b)).rightJustified(2, '0'));
+
+            QString formattedEnd = QString("%1:%2:%3 %4/%5/%6")
+                .arg(endParts[0]).arg(endParts[1]).arg(endParts[2])
+                .arg(endParts[3]).arg(endParts[4]).arg(endParts[5]);
+
+            // --- Insert into Table ---
+            int row = ui->tableWidget_getLogEvents->rowCount();
+            ui->tableWidget_getLogEvents->insertRow(row);
+            ui->tableWidget_getLogEvents->setItem(row, 0, new QTableWidgetItem(QString::number(eventId)));
+            ui->tableWidget_getLogEvents->setItem(row, 1, new QTableWidgetItem(formattedStart));
+            ui->tableWidget_getLogEvents->setItem(row, 2, new QTableWidgetItem(formattedEnd));
+
+            validCount++;
+        }
+
+        // --- Count trailing FFs ---
+        int ffCount = 0;
+        for (int i = validCount * packetSize; i < logData.size(); ++i)
+        {
+            if (static_cast<quint8>(logData[i]) == 0xFF)
+                ffCount++;
+        }
+
+        qDebug() << "Total Packets Parsed:" << validCount;
+        qDebug() << "Trailing FF bytes count:" << ffCount;
+
+        writeToNotes("Total Packets Parsed:"+QString::number(validCount));
+        writeToNotes("Trailing FF bytes count:"+QString::number(ffCount));
+    }
+
 }
 
 
@@ -875,5 +1030,45 @@ void MainWindow::on_pushButton_getEventData_clicked()
 
 
     emit sendMsgId(0x01);
+    serialObj->writeData(command);
+}
+
+void MainWindow::on_pushButton_startLog_clicked()
+{
+    // Start the timeout timer
+    responseTimer->start(2000); // 2 Sec timer
+
+    QByteArray command;
+
+    command.append(0x53); //1
+    command.append(0x54); //2
+    command.append(0x42); //3
+
+
+    qDebug() << "Start Log cmd sent : " + hexBytes(command);
+    writeToNotes("Start Log cmd sent : " + hexBytes(command));
+
+
+    emit sendMsgId(0x02);
+    serialObj->writeData(command);
+}
+
+void MainWindow::on_pushButton_getLogEvents_clicked()
+{
+    // Start the timeout timer
+    responseTimer->start(2000); // 2 Sec timer
+
+    QByteArray command;
+
+    command.append(0x53); //1
+    command.append(0x54); //2
+    command.append(0x43); //3
+
+
+    qDebug() << "Get Log Events cmd sent : " + hexBytes(command);
+    writeToNotes("Get Log Events cmd sent : " + hexBytes(command));
+
+
+    emit sendMsgId(0x03);
     serialObj->writeData(command);
 }

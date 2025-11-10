@@ -162,11 +162,57 @@ void serialPortHandler::readData()
             buffer.clear();
             executeWriteToNotes("Get Event Data cmd received bytes: "+ResponseData.toHex(' ').toUpper());
         }
+        else if(buffer == QByteArray::fromHex("53 54 45 FF"))
+        {
+            powerId = 0x01;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Get Event Data cmd received bytes [NACK Condition]: "+ResponseData.toHex(' ').toUpper());
+        }
         else
         {
             executeWriteToNotes("Required AA BB as header and AA BB CC DD FF as footer, bytes Received bytes: "+QString::number(buffer.size()));
         }
 
+    }
+    else if(msgId == 0x02)
+    {
+        qDebug() << "msgId:" <<hex<<msgId;
+
+        if(buffer == QByteArray::fromHex("54 53 41 43 4B"))
+        {
+            powerId = 0x02;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Start Log Initial cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer == QByteArray::fromHex("54 53 50"))
+        {
+            powerId = 0x02;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Start Log End cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else
+        {
+            executeWriteToNotes("Required 3, bytes Received bytes: "+QString::number(buffer.size()));
+        }
+    }
+    else if(msgId == 0x03)
+    {
+        qDebug() << "msgId:" <<hex<<msgId;
+
+        if(buffer.startsWith(QByteArray::fromHex("AA BB")) && buffer.size() == 4096)
+        {
+            powerId = 0x03;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Get Log Events cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else
+        {
+            executeWriteToNotes("Required 4096, bytes Received bytes: "+QString::number(buffer.size()));
+        }
     }
     else
     {
@@ -178,7 +224,20 @@ void serialPortHandler::readData()
 
     switch(powerId)
     {
+
     case 0x01:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
+
+    case 0x02:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
+
+    case 0x03:
     {
         emit guiDisplay(ResponseData);
     }
@@ -187,7 +246,6 @@ void serialPortHandler::readData()
     default:
     {
         qDebug() << "Unknown powerId: " <<hex << powerId << " with data: " << ResponseData.size();
-
     }
 
     }
