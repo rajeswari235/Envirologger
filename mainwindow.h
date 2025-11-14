@@ -21,6 +21,9 @@
 #include <QScreen>
 #include <QInputDialog>
 
+#include <enlargeplot.h>
+#include "xlsxdocument.h"   // QXlsx header
+
 
 
 
@@ -71,6 +74,18 @@ public:
     void makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100AdxlList,QList<QByteArray> &rawPacketTemperatureList);
     void makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList);
 
+    void saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
+                                              const QVector<double> &xAdxl,
+                                              const QVector<double> &yAdxl,
+                                              const QVector<double> &zAdxl,
+                                              const QVector<double> &tempIndex,
+                                              const QVector<double> &temperature,
+                                              const QVector<double> &inclIndex,
+                                              const QVector<double> &inclX,
+                                              const QVector<double> &inclY);
+
+   void initializeSensorVectors();
+
 
 private slots:
         void onPortSelected(const QString &portName);
@@ -93,6 +108,18 @@ private slots:
 
         void on_pushButton_getLogEvents_clicked();
 
+        void on_pushButton_stopPlot_clicked();
+
+        void on_pushButton_enlargePlot_clicked();
+
+        void on_pushButton_fitToScreen_clicked();
+
+        void on_pushButton_saveLogPlots_clicked();
+
+        void on_pushButton_clearLogPlots_clicked();
+
+        void on_pushButton_clearPlots_clicked();
+
 signals:
     void sendMsgId(quint8 id);
 
@@ -110,7 +137,25 @@ private:
     //Extras
      QElapsedTimer elapsedTimer;
 
-     QDialog *dlg;
+     QDialog *dlg = nullptr;
+
+     QDialog *dlgPlot = nullptr;
+
+     // --- ADXL ---
+     QVector<double> finalAdxlIndex;
+     QVector<double> finalXAdxl;
+     QVector<double> finalYAdxl;
+     QVector<double> finalZAdxl;
+
+     // --- Temperature ---
+     QVector<double> finalTempIndex;
+     QVector<double> finalTemperature;
+
+     // --- Inclinometer ---
+     QVector<double> finalInclIndex;
+     QVector<double> finalInclX;
+     QVector<double> finalInclY;
+
 
 };
 #endif // MAINWINDOW_H

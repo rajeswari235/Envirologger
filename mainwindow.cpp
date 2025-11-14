@@ -52,7 +52,24 @@ MainWindow::MainWindow(QWidget *parent)
 
     setWindowTitle("Envirologger");
 
+    showMaximized();
+
+    ui->tabWidget->setCurrentWidget(ui->tab_logger);
+
     initializeAllPlots();
+
+    // Setting Table Get Log Events
+    ui->tableWidget_getLogEvents->setColumnCount(3);
+    ui->tableWidget_getLogEvents->setHorizontalHeaderLabels({"Event ID", "Start Time and Date", "End Time and Date"});
+
+    ui->tableWidget_getLogEvents->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    ui->tableWidget_getLogEvents->setAlternatingRowColors(true);
+
+    auto header = ui->tableWidget_getLogEvents->horizontalHeader();
+    header->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(1, QHeaderView::Stretch);
+    header->setSectionResizeMode(2, QHeaderView::Stretch);
 
 }
 
@@ -518,11 +535,17 @@ void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100Adxl
             qint16 yRaw = (static_cast<quint8>(trimmed[i + 2]) << 8) | static_cast<quint8>(trimmed[i + 3]);
             qint16 zRaw = (static_cast<quint8>(trimmed[i + 4]) << 8) | static_cast<quint8>(trimmed[i + 5]);
 
+            // Keep last 12 bits only first 4 bits eliminate in a 16 bit integer
+            xRaw &= 0x0FFF;
+            yRaw &= 0x0FFF;
+            zRaw &= 0x0FFF;
+
             sampleIndex.append(globalSample++);
-            xAdxl.append((xRaw * 3.3) / 4096.0);
-            yAdxl.append((yRaw * 3.3) / 4096.0);
-            zAdxl.append((zRaw * 3.3) / 4096.0);
+            xAdxl.append((xRaw * 3.3 * 2) / 4096.0);
+            yAdxl.append((yRaw * 3.3 * 2) / 4096.0);
+            zAdxl.append((zRaw * 3.3 * 2) / 4096.0);
         }
+
 
         qDebug() << "Processed ADXL packet" << p << ", extracted" << usableSize / 6 << "samples";
     }
@@ -544,6 +567,10 @@ void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100Adxl
 
         quint16 tempRaw = (static_cast<quint8>(tempBytes[0]) << 8) | static_cast<quint8>(tempBytes[1]);
         tempIndex.append(i);
+
+        // Keep first 14 bits only last 2 bits eliminate in a 16 bit integer
+        tempRaw &= ~0x0003;
+
         temperatureValues.append(-46.85 + (175.72 * tempRaw) / 65536.0);
     }
 
@@ -567,6 +594,17 @@ void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100Adxl
 
     // --- Plot Temperature ---
     plotGraph(ui->customPlot_temperature, tempIndex, temperatureValues);
+
+    // --- Passing local values to global values
+
+    this->finalAdxlIndex = sampleIndex;
+    this->finalXAdxl = xAdxl;
+    this->finalYAdxl = yAdxl;
+    this->finalZAdxl = zAdxl;
+
+    this->finalTempIndex = tempIndex;
+    this->finalTemperature = temperatureValues;
+
 }
 
 void MainWindow::makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList)
@@ -644,8 +682,136 @@ void MainWindow::makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList
 
     plotGraph(ui->customPlot_inclinometer_x, sampleIndex, inclX);
     plotGraph(ui->customPlot_inclinometer_y, sampleIndex, inclY);
+
+    // --- Passing local values to global values
+    this->finalInclIndex = sampleIndex;
+    this->finalInclX = inclX;
+    this->finalInclY = inclY;
+
 }
 
+void MainWindow::saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
+                                          const QVector<double> &xAdxl,
+                                          const QVector<double> &yAdxl,
+                                          const QVector<double> &zAdxl,
+                                          const QVector<double> &tempIndex,
+                                          const QVector<double> &temperature,
+                                          const QVector<double> &inclIndex,
+                                          const QVector<double> &inclX,
+                                          const QVector<double> &inclY)
+{
+    QXlsx::Document xlsx;
+
+    // ---------- HEADER FORMAT ----------
+    QXlsx::Format headerFormat;
+    headerFormat.setFontBold(true);
+    headerFormat.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
+    headerFormat.setBorderStyle(QXlsx::Format::BorderThin);
+
+    // ---------- DATA FORMAT ----------
+    QXlsx::Format dataFormat;
+    dataFormat.setBorderStyle(QXlsx::Format::BorderThin);
+
+    // ---------------- HEADERS ----------------
+    xlsx.write("A1", "Sample Index", headerFormat);
+    xlsx.write("B1", "ADXL X (V)",   headerFormat);
+    xlsx.write("C1", "ADXL Y (V)",   headerFormat);
+    xlsx.write("D1", "ADXL Z (V)",   headerFormat);
+
+    xlsx.write("F1", "Temp Index",   headerFormat);
+    xlsx.write("G1", "Temperature (°C)", headerFormat);
+
+    xlsx.write("I1", "Incl Index",   headerFormat);
+    xlsx.write("J1", "Incl X (deg)", headerFormat);
+    xlsx.write("K1", "Incl Y (deg)", headerFormat);
+
+    // ---------- COLUMN WIDTHS ----------
+    xlsx.setColumnWidth(1, 1, 12);   // Index
+    xlsx.setColumnWidth(2, 4, 15);   // ADXL X,Y,Z
+    xlsx.setColumnWidth(6, 7, 15);   // Temperature
+    xlsx.setColumnWidth(9, 11, 15);  // Inclinometer
+
+    int row = 2;
+
+    // ------------ ADXL Values --------------
+    for (int i = 0; i < xAdxl.size(); i++)
+    {
+        xlsx.write(row, 1, adxlIndex[i], dataFormat);
+        xlsx.write(row, 2, xAdxl[i],     dataFormat);
+        xlsx.write(row, 3, yAdxl[i],     dataFormat);
+        xlsx.write(row, 4, zAdxl[i],     dataFormat);
+        row++;
+    }
+
+    // ------------ Temperature Values --------------
+    int tRow = 2;
+    for (int i = 0; i < temperature.size(); i++)
+    {
+        xlsx.write(tRow, 6, tempIndex[i],   dataFormat);
+        xlsx.write(tRow, 7, temperature[i], dataFormat);
+        tRow++;
+    }
+
+    // ------------ Inclinometer Values --------------
+    int iRow = 2;
+    for (int i = 0; i < inclX.size(); i++)
+    {
+        xlsx.write(iRow, 9,  inclIndex[i], dataFormat);
+        xlsx.write(iRow, 10, inclX[i],     dataFormat);
+        xlsx.write(iRow, 11, inclY[i],     dataFormat);
+        iRow++;
+    }
+
+    // ---------------- SIMPLE FILE DIALOG ----------------
+    QString defaultName = QString("SensorData_%1.xlsx")
+            .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+
+    QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+
+    QString fullPath = QFileDialog::getSaveFileName(
+                this,
+                "Save Sensor Data",
+                desktopPath + "/" + defaultName,
+                "Excel Files (*.xlsx)"
+    );
+
+    if (fullPath.isEmpty()) {
+        QMessageBox::information(this, "Save Cancelled",
+                                 "User cancelled the file save operation.");
+        return;
+    }
+
+    if (!fullPath.endsWith(".xlsx", Qt::CaseInsensitive))
+        fullPath += ".xlsx";
+
+    // ---------------- SAVE ----------------
+    if (xlsx.saveAs(fullPath)) {
+        QMessageBox::information(this, "Success",
+                                 "Sensor data saved successfully at:\n" + fullPath);
+    } else {
+        QMessageBox::critical(this, "Save Failed",
+                              "Failed to save Excel file.\nCheck permissions or try another location.");
+    }
+}
+
+
+void MainWindow::initializeSensorVectors()
+{
+    // --- ADXL ---
+    finalAdxlIndex.clear();
+    finalXAdxl.clear();
+    finalYAdxl.clear();
+    finalZAdxl.clear();
+
+    // --- Temperature ---
+    finalTempIndex.clear();
+    finalTemperature.clear();
+
+    // --- Inclinometer ---
+    finalInclIndex.clear();
+    finalInclX.clear();
+    finalInclY.clear();
+}
 
 
 
@@ -653,6 +819,12 @@ void MainWindow::portStatus(const QString &data)
 {
     if(data.startsWith("Serial object is not initialized/port not selected"))
     {
+        if(dlgPlot)
+        {
+            dlgPlot->close();
+            dlgPlot = nullptr;
+        }
+
         QMessageBox::critical(this,"Port Error","Please Select Port Using Above Dropdown");
     }
 
@@ -663,6 +835,11 @@ void MainWindow::portStatus(const QString &data)
 
     if(data.startsWith("Failed to open port"))
     {
+        if(dlgPlot)
+        {
+            dlgPlot->close();
+            dlgPlot = nullptr;
+        }
         QMessageBox::critical(this,"Error",data);
     }
 
@@ -804,9 +981,11 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         qDebug() << " Temperature samples:" << packetTemperatureList.size();
         qDebug() << " Invalid headers:" << invalidHeaderCount;
 
-        if(!packetTemperatureList.isEmpty())
+        if(packetTemperatureList.size() != 147)
         {
-            qDebug()<<" Temparature samples list at 146: "<<packetTemperatureList.at(146).toHex(' ').toUpper();
+            qDebug()<<"Lesser Adxl/Temperature Packets Detected With Size : "<<packetTemperatureList.size();
+            writeToNotes("Lesser Adxl/Temperature Packets Detected With Size : "+QString::number(packetTemperatureList.size()));
+            QMessageBox::warning(this,"Packet Missing","Some packets are missing 147/"+QString::number(packetTemperatureList.size()));
         }
 
         // writeToNotes log
@@ -816,15 +995,31 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         writeToNotes("Temperature samples: " + QString::number(packetTemperatureList.size()));
         writeToNotes("Invalid headers: " + QString::number(invalidHeaderCount));
 
-        if(!packetTemperatureList.isEmpty())
-        {
-            writeToNotes("Temperature sample[146]: " + packetTemperatureList.at(146).toHex(' ').toUpper());
-        }
 
         //Making Packets
         makePacket32UI(packet32List);
         makePacket4100AdxlTempList(packet4100AdxlList,packetTemperatureList);
         makePacket4100InclList(packet4100InclList);
+
+        if(dlgPlot)
+        {
+            dlgPlot->close();
+            dlgPlot = nullptr;
+        }
+
+        QDialog *excelSavingDialog = createPleaseWaitDialog("⌛ Please Wait, Data Saving ...");
+
+        saveAllSensorDataToExcel(
+            finalAdxlIndex, finalXAdxl, finalYAdxl, finalZAdxl,
+            finalTempIndex, finalTemperature,
+            finalInclIndex, finalInclX, finalInclY
+        );
+
+        if(excelSavingDialog)
+        {
+            excelSavingDialog->close();
+            excelSavingDialog = nullptr;
+        }
 
     }
     // Get Event Data Command Nack Condition mdgId 0x01
@@ -860,7 +1055,7 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
     }
 
     // Get Log Events Command msgId 0x03
-    else if (data.startsWith(QByteArray::fromHex("AA BB")) && data.size() == 4096)
+    else if (data.startsWith(QByteArray::fromHex("AA BB")))
     {
         QByteArray logData = data;
         int packetSize = 32;
@@ -870,7 +1065,7 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
         ui->tableWidget_getLogEvents->clear();
         ui->tableWidget_getLogEvents->setRowCount(0);
         ui->tableWidget_getLogEvents->setColumnCount(3);
-        ui->tableWidget_getLogEvents->setHorizontalHeaderLabels(QStringList() << "Event ID" << "Start Time" << "End Time");
+        ui->tableWidget_getLogEvents->setHorizontalHeaderLabels(QStringList() << "Event ID" << "Start Time and Date" << "End Time and Date");
 
         int validCount = 0;
 
@@ -934,6 +1129,27 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
 
         writeToNotes("Total Packets Parsed:"+QString::number(validCount));
         writeToNotes("Trailing FF bytes count:"+QString::number(ffCount));
+    }
+
+    // Stop Plot Command msgId 0x04
+    else if(data == QByteArray::fromHex("53 54 46"))
+    {
+        QDialog *excelSavingDialog = createPleaseWaitDialog("⌛ Please Wait, Data Saving ...");
+
+        saveAllSensorDataToExcel(
+            finalAdxlIndex, finalXAdxl, finalYAdxl, finalZAdxl,
+            finalTempIndex, finalTemperature,
+            finalInclIndex, finalInclX, finalInclY
+        );
+
+        if(excelSavingDialog)
+        {
+            excelSavingDialog->close();
+            excelSavingDialog = nullptr;
+        }
+
+        QMessageBox::information(this,"Success","Plot stopped/saved successfully !");
+
     }
 
 }
@@ -1008,6 +1224,10 @@ void MainWindow::on_pushButton_getEventData_clicked()
         return;
     }
 
+    initializeAllPlots();
+
+    initializeSensorVectors();
+
     // Start the timeout timer
     responseTimer->start(2000); // 2 Sec timer
 
@@ -1030,6 +1250,20 @@ void MainWindow::on_pushButton_getEventData_clicked()
 
 
     emit sendMsgId(0x01);
+
+    dlgPlot = createPleaseWaitDialog("⌛ Please Wait Loading Plot !!!");
+
+    // Automatic dlgPlot close after 10 Sec watchdog timer
+    QTimer::singleShot(10000,[this](){
+        if(dlgPlot)
+        {
+            dlgPlot->close();
+            dlgPlot = nullptr;
+            QMessageBox::warning(this,"Error","Data Interrupted");
+        }
+
+    });
+
     serialObj->writeData(command);
 }
 
@@ -1071,4 +1305,213 @@ void MainWindow::on_pushButton_getLogEvents_clicked()
 
     emit sendMsgId(0x03);
     serialObj->writeData(command);
+}
+
+void MainWindow::on_pushButton_stopPlot_clicked()
+{
+    // Start the timeout timer
+    responseTimer->start(2000); // 2 Sec timer
+
+    QByteArray command;
+
+    command.append(0x53); //1
+    command.append(0x54); //2
+    command.append(0x46); //3
+
+
+    qDebug() << "Stop Plot cmd sent : " + hexBytes(command);
+    writeToNotes("Stop Plot Events cmd sent : " + hexBytes(command));
+
+
+    emit sendMsgId(0x04);
+    serialObj->writeData(command);
+}
+
+void MainWindow::on_pushButton_enlargePlot_clicked()
+{
+    QString selected = ui->comboBox_enlargePlot->currentText();
+    QCustomPlot *plot = nullptr;
+
+    if (selected == "ADXL_X")          plot = ui->customPlot_adxl_x;
+    else if (selected == "ADXL_Y")     plot = ui->customPlot_adxl_y;
+    else if (selected == "ADXL_Z")     plot = ui->customPlot_adxl_z;
+    else if (selected == "Temperature") plot = ui->customPlot_temperature;
+    else if (selected == "Inclinometer_X") plot = ui->customPlot_inclinometer_x;
+    else if (selected == "Inclinometer_Y") plot = ui->customPlot_inclinometer_y;
+
+    if (!plot)
+    {
+        QMessageBox::warning(this, "Warning", "Please select a valid plot to enlarge!");
+        return;
+    }
+
+    // Create enlargePlot dialog and load the selected plot into it
+    enlargePlot *dlg = new enlargePlot(this);
+    dlg->loadPlot(plot);
+    dlg->setModal(false);
+    dlg->show();
+}
+
+
+void MainWindow::on_pushButton_fitToScreen_clicked()
+{
+    // Collect all plots
+    QList<QCustomPlot*> allPlots = {
+        ui->customPlot_adxl_x,
+        ui->customPlot_adxl_y,
+        ui->customPlot_adxl_z,
+        ui->customPlot_inclinometer_x,
+        ui->customPlot_inclinometer_y,
+        ui->customPlot_temperature
+    };
+
+    // Iterate through each and fit accordingly
+    for (QCustomPlot *plot : allPlots)
+    {
+        if (!plot) continue;
+
+        bool hasData = false;
+        for (int i = 0; i < plot->graphCount(); ++i)
+        {
+            if (plot->graph(i)->dataCount() > 0)
+            {
+                hasData = true;
+                break;
+            }
+        }
+
+        if (hasData)
+        {
+            //  Auto-fit to existing data
+            plot->rescaleAxes(true);
+
+            // Small padding for aesthetics
+            plot->xAxis->scaleRange(1.05, plot->xAxis->range().center());
+            plot->yAxis->scaleRange(1.05, plot->yAxis->range().center());
+        }
+        else
+        {
+            //  No data — reset to initial default view
+            plot->xAxis->setRange(0, 100);
+            plot->yAxis->setRange(-5, 5);
+        }
+
+        plot->replot();
+    }
+
+    qDebug() << "All plots adjusted — data-fitted if available, otherwise reset to default view.";
+    writeToNotes("All plots adjusted — data-fitted if available, otherwise reset to default view.");
+}
+
+
+void MainWindow::on_pushButton_saveLogPlots_clicked()
+{
+    // Prepare default filename (EventsLogData_yyyyMMdd_HHmmss.xlsx)
+    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QString defaultFileName = QString("EventsLogData_%1.xlsx").arg(timestamp);
+
+    // Get desktop path as default location
+    QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    QString defaultFullPath = desktopPath + "/" + defaultFileName;
+
+    // Ask user where to save (with default pre-filled)
+    QString selectedFile = QFileDialog::getSaveFileName(
+        this,
+        tr("Save Log Data"),
+        defaultFullPath,
+        tr("Excel Files (*.xlsx)")
+    );
+
+    if (selectedFile.isEmpty())
+        return; // user cancelled
+
+    // Ensure file ends with .xlsx
+    if (!selectedFile.endsWith(".xlsx", Qt::CaseInsensitive))
+        selectedFile += ".xlsx";
+
+    // Create an Excel document
+    QXlsx::Document xlsx;
+
+    // Header format (just bold)
+    QXlsx::Format headerFormat;
+    headerFormat.setFontBold(true);
+
+    // Write headers
+    xlsx.write(1, 1, "Event ID", headerFormat);
+    xlsx.write(1, 2, "Start Time and Date", headerFormat);
+    xlsx.write(1, 3, "End Time and Date", headerFormat);
+
+    // Write table data
+    int rowCount = ui->tableWidget_getLogEvents->rowCount();
+    int colCount = ui->tableWidget_getLogEvents->columnCount();
+
+    for (int r = 0; r < rowCount; ++r)
+    {
+        for (int c = 0; c < colCount; ++c)
+        {
+            QTableWidgetItem *item = ui->tableWidget_getLogEvents->item(r, c);
+            if (!item) continue;
+
+            if (c == 0) // Event ID column should be integer
+            {
+                bool ok;
+                int eventId = item->text().toInt(&ok);
+                if (ok)
+                    xlsx.write(r + 2, c + 1, eventId);
+                else
+                    xlsx.write(r + 2, c + 1, item->text());
+            }
+            else
+            {
+                xlsx.write(r + 2, c + 1, item->text());
+            }
+        }
+    }
+
+    // Auto fit columns
+    xlsx.currentWorksheet()->setColumnWidth(2, 3, 20);
+
+    // Save file
+    if (xlsx.saveAs(selectedFile))
+    {
+        QMessageBox::information(this, "Success",
+                                 " Log data saved successfully at:\n" + selectedFile);
+    }
+    else
+    {
+        QMessageBox::critical(this, "Error",
+                              " Failed to save log data.\nPlease check permissions or path.");
+    }
+}
+
+
+
+void MainWindow::on_pushButton_clearLogPlots_clicked()
+{
+    ui->tableWidget_getLogEvents->setRowCount(0);
+    writeToNotes("table data cleared.");
+}
+
+void MainWindow::on_pushButton_clearPlots_clicked()
+{
+    // Clear all plot graphs
+     QList<QCustomPlot*> allPlots = {
+         ui->customPlot_adxl_x,
+         ui->customPlot_adxl_y,
+         ui->customPlot_adxl_z,
+         ui->customPlot_inclinometer_x,
+         ui->customPlot_inclinometer_y,
+         ui->customPlot_temperature
+     };
+
+     for (QCustomPlot *plot : allPlots)
+     {
+         if (plot) {
+             for (int i = 0; i < plot->graphCount(); ++i)
+                 plot->graph(i)->data()->clear();
+             plot->replot();
+         }
+     }
+
+     writeToNotes("All log plots are cleared.");
 }

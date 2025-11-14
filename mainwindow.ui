@@ -200,7 +200,7 @@
               </font>
              </property>
              <property name="text">
-              <string>Stop Plot</string>
+              <string>Save Plot</string>
              </property>
             </widget>
            </item>
@@ -324,6 +324,106 @@
              </property>
             </widget>
            </item>
+           <item>
+            <spacer name="verticalSpacer_5">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_5">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Plot Settings</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox_enlargePlot">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <item>
+              <property name="text">
+               <string>ADXL_X</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>ADXL_Y</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>ADXL_Z</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Temperature</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Inclinometer_X</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Inclinometer_Y</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_enlargePlot">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Enlarge Plot</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_fitToScreen">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Fit To Screen</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_clearPlots">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Clear Plots</string>
+             </property>
+            </widget>
+           </item>
           </layout>
          </widget>
         </item>
@@ -333,42 +433,157 @@
        <attribute name="title">
         <string>Settings</string>
        </attribute>
-       <widget class="QPushButton" name="pushButton_startLog">
-        <property name="geometry">
-         <rect>
-          <x>10</x>
-          <y>30</y>
-          <width>75</width>
-          <height>23</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Start Log</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="pushButton_getLogEvents">
-        <property name="geometry">
-         <rect>
-          <x>10</x>
-          <y>70</y>
-          <width>101</width>
-          <height>23</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Get Log Events</string>
-        </property>
-       </widget>
-       <widget class="QTableWidget" name="tableWidget_getLogEvents">
-        <property name="geometry">
-         <rect>
-          <x>10</x>
-          <y>120</y>
-          <width>1021</width>
-          <height>411</height>
-         </rect>
-        </property>
-       </widget>
+       <layout class="QGridLayout" name="gridLayout_6">
+        <item row="0" column="0">
+         <widget class="QGroupBox" name="groupBox_logEvents">
+          <property name="styleSheet">
+           <string notr="true">QGroupBox {
+    border: 2px solid black;
+    border-radius: 10px;
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.9,
+        fx: 0.5, fy: 0.5,
+        stop: 0 rgba(57, 255, 20, 60),   /* brighter center */
+        stop: 1 rgba(57, 255, 20, 15)    /* fades softly to edges */
+    );
+}
+</string>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_5">
+           <item row="0" column="0">
+            <widget class="QPushButton" name="pushButton_startLog">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Start Log</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QPushButton" name="pushButton_getLogEvents">
+             <property name="font">
+              <font>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>Get Log Events</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QTableWidget" name="tableWidget_getLogEvents">
+             <property name="font">
+              <font>
+               <family>Segoe UI</family>
+               <pointsize>10</pointsize>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="styleSheet">
+              <string notr="true"> QTableWidget {
+        background-color: #0F1F0F;                /* deep green background */
+        alternate-background-color: #162C16;     /* subtle dark alternate row */
+        color: #FFFF66;                           /* bold yellow text */
+        gridline-color: #2C4C2C;                 /* subtle grid lines */
+        border: 2px solid #00FF96;               /* neon border */
+        border-radius: 6px;
+        selection-background-color: #004C3F;     /* dark teal when selected */
+        selection-color: #FFFFFF;
+        font-family: 'Segoe UI';
+        font-size: 10pt;
+		font-weight: bold;
+    }
+
+    QHeaderView::section {
+        background-color: #00B86B;               /* green gradient header */
+        color: black;
+        font-weight: bold;
+        border: 1px solid #00FF96;
+        padding: 4px;
+        font-size: 9.5pt;
+    }
+
+    QHeaderView::section:horizontal {
+        background-color: qlineargradient(
+            x1:0, y1:0, x2:0, y2:1,
+            stop:0 #00FF96, stop:1 #007A4B
+        );
+        color: #000000;
+        font-weight: bold;
+    }
+
+    QHeaderView::section:vertical {
+        background-color: #006644;
+        color: white;
+    }
+
+    QScrollBar:vertical {
+        border: none;
+        background: #0F1F0F;
+        width: 10px;
+        margin: 0px;
+    }
+
+    QScrollBar::handle:vertical {
+        background: #00FF96;
+        min-height: 20px;
+        border-radius: 4px;
+    }
+
+    QScrollBar::handle:vertical:hover {
+        background: #54AA33;
+    }
+
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {
+        background: none;
+        border: none;
+    }
+
+    QTableCornerButton::section {
+        background-color: #00B86B;
+        border: 1px solid #00FF96;
+    }</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0">
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <widget class="QPushButton" name="pushButton_saveLogPlots">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>Save Log Events</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButton_clearLogPlots">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>Clear Log Events</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>

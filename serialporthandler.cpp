@@ -202,7 +202,7 @@ void serialPortHandler::readData()
     {
         qDebug() << "msgId:" <<hex<<msgId;
 
-        if(buffer.startsWith(QByteArray::fromHex("AA BB")) && buffer.size() == 4096)
+        if(buffer.startsWith(QByteArray::fromHex("AA BB")))
         {
             powerId = 0x03;
             ResponseData = buffer;
@@ -211,7 +211,23 @@ void serialPortHandler::readData()
         }
         else
         {
-            executeWriteToNotes("Required 4096, bytes Received bytes: "+QString::number(buffer.size()));
+            executeWriteToNotes("Required continuous bytes with header AA BB, bytes Received bytes: "+QString::number(buffer.size()));
+        }
+    }
+    else if(msgId == 0x04)
+    {
+        qDebug() << "msgId:" <<hex<<msgId;
+
+        if(buffer == QByteArray::fromHex("53 54 46"))
+        {
+            powerId = 0x04;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Stop Plot cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else
+        {
+            executeWriteToNotes("Required 3, bytes Received bytes: "+QString::number(buffer.size()));
         }
     }
     else
@@ -238,6 +254,12 @@ void serialPortHandler::readData()
         break;
 
     case 0x03:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
+
+    case 0x04:
     {
         emit guiDisplay(ResponseData);
     }
