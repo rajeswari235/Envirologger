@@ -24,6 +24,9 @@
 #include <enlargeplot.h>
 #include "xlsxdocument.h"   // QXlsx header
 
+#include <complex>
+#include <vector>
+#include <cmath>
 
 
 
@@ -86,6 +89,17 @@ public:
 
    void initializeSensorVectors();
 
+   // FFT helpers as class member functions
+   int nextPowerOfTwo(int v);
+
+   void fftRecursive(std::vector<std::complex<double>> &a);
+
+   void plotFFT(const QVector<double> &signal,
+                QCustomPlot *plot,
+                double sampleInterval = 0.1);
+
+   void setupFFTPlot(QCustomPlot *plot, const QString &xLabel);
+
 
 private slots:
         void onPortSelected(const QString &portName);
@@ -119,6 +133,10 @@ private slots:
         void on_pushButton_clearLogPlots_clicked();
 
         void on_pushButton_clearPlots_clicked();
+
+        void on_pushButton_fitToScreen_fft_clicked();
+
+        void on_pushButton_clearPoints_fft_clicked();
 
 signals:
     void sendMsgId(quint8 id);

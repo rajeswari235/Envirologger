@@ -58,6 +58,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     initializeAllPlots();
 
+    setupFFTPlot(ui->customPlot_adxl_x_FFT, "ADXL X Frequency (Hz)");
+    setupFFTPlot(ui->customPlot_adxl_y_FFT, "ADXL Y Frequency (Hz)");
+    setupFFTPlot(ui->customPlot_adxl_z_FFT, "ADXL Z Frequency (Hz)");
+
     // Setting Table Get Log Events
     ui->tableWidget_getLogEvents->setColumnCount(3);
     ui->tableWidget_getLogEvents->setHorizontalHeaderLabels({"Event ID", "Start Time and Date", "End Time and Date"});
@@ -605,6 +609,13 @@ void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100Adxl
     this->finalTempIndex = tempIndex;
     this->finalTemperature = temperatureValues;
 
+    // --- FFT Plot ---
+    double sampleInterval = 0.1; // 100 ms per sample
+
+    plotFFT(finalXAdxl, ui->customPlot_adxl_x_FFT, sampleInterval);
+    plotFFT(finalYAdxl, ui->customPlot_adxl_y_FFT, sampleInterval);
+    plotFFT(finalZAdxl, ui->customPlot_adxl_z_FFT, sampleInterval);
+
 }
 
 void MainWindow::makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList)
@@ -812,6 +823,156 @@ void MainWindow::initializeSensorVectors()
     finalInclX.clear();
     finalInclY.clear();
 }
+
+int MainWindow::nextPowerOfTwo(int v)
+{
+    int p = 1;
+    while (p < v) p <<= 1;
+    return p;
+}
+
+void MainWindow::fftRecursive(std::vector<std::complex<double>> &a)
+{
+    int n = (int)a.size();
+    if (n <= 1) return;
+
+    std::vector<std::complex<double>> even(n/2), odd(n/2);
+    for (int i = 0; i < n/2; ++i) {
+        even[i] = a[2*i];
+        odd[i]  = a[2*i + 1];
+    }
+
+    fftRecursive(even);
+    fftRecursive(odd);
+
+    const double PI = std::acos(-1.0);
+    for (int k = 0; k < n/2; k++)
+    {
+        std::complex<double> t =
+                std::polar(1.0, -2.0 * PI * k / n) * odd[k];
+
+        a[k]       = even[k] + t;
+        a[k+n/2]   = even[k] - t;
+    }
+}
+
+void MainWindow::setupFFTPlot(QCustomPlot *plot, const QString &xLabel)
+{
+    if (!plot) return;
+
+    // ---------- NEON THEME ----------
+    plot->setBackground(QColor(10, 20, 10));
+    plot->axisRect()->setBackground(QColor(15, 35, 15));
+
+    QColor neonGreen(0, 255, 150);
+    QColor softGreen(150, 255, 180);
+
+    plot->xAxis->setLabel(xLabel);
+    plot->yAxis->setLabel("Amplitude");
+
+    // ---- Bold Axis Labels ----
+    QFont labelFont("Arial", 10, QFont::Bold);
+    plot->xAxis->setLabelFont(labelFont);
+    plot->yAxis->setLabelFont(labelFont);
+
+    plot->xAxis->setLabelColor(neonGreen);
+    plot->yAxis->setLabelColor(neonGreen);
+    plot->xAxis->setTickLabelColor(softGreen);
+    plot->yAxis->setTickLabelColor(softGreen);
+
+    plot->xAxis->setBasePen(QPen(neonGreen, 1));
+    plot->yAxis->setBasePen(QPen(neonGreen, 1));
+    plot->xAxis->setTickPen(QPen(neonGreen, 1));
+    plot->yAxis->setTickPen(QPen(neonGreen, 1));
+
+    plot->xAxis->grid()->setPen(QPen(QColor(30, 60, 30)));
+    plot->yAxis->grid()->setPen(QPen(QColor(30, 60, 30)));
+    plot->xAxis->grid()->setSubGridPen(QPen(QColor(20, 40, 20)));
+    plot->yAxis->grid()->setSubGridPen(QPen(QColor(20, 40, 20)));
+    plot->xAxis->grid()->setSubGridVisible(true);
+    plot->yAxis->grid()->setSubGridVisible(true);
+
+    // ---------- ADD EMPTY GRAPH ----------
+    plot->addGraph();
+    plot->graph(0)->setPen(QPen(neonGreen, 1));
+
+    // ---------- INTERACTIONS ----------
+    plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
+
+    // ---------- CLICK-POINT SELECTION ----------
+    connect(plot, &QCustomPlot::plottableClick,
+            this,
+            [plot](QCPAbstractPlottable *plottable, int index, QMouseEvent *)
+    {
+        if (!plottable) return;
+        QCPGraph *g = qobject_cast<QCPGraph*>(plottable);
+        if (!g) return;
+
+        double freqValue = g->data()->at(index)->key;
+        double ampValue  = g->data()->at(index)->value;
+
+        plot->clearItems();
+
+        QCPItemTracer *tracer = new QCPItemTracer(plot);
+        tracer->setGraph(g);
+        tracer->setGraphKey(freqValue);
+        tracer->setStyle(QCPItemTracer::tsCircle);
+        tracer->setPen(QPen(Qt::red));
+        tracer->setBrush(Qt::red);
+        tracer->setSize(7);
+
+        QCPItemText *text = new QCPItemText(plot);
+        text->setPositionAlignment(Qt::AlignLeft | Qt::AlignTop);
+        text->position->setParentAnchor(tracer->position);
+        text->position->setCoords(10, -10);
+        text->setText(QString("f = %1 Hz\nA = %2")
+                          .arg(freqValue, 0, 'f', 2)
+                          .arg(ampValue, 0, 'f', 4));
+        text->setColor(QColor(0, 255, 150));
+        text->setFont(QFont("Arial", 10));
+
+        plot->replot();
+    });
+}
+
+
+void MainWindow::plotFFT(const QVector<double> &signal,
+                         QCustomPlot *plot,
+                         double sampleInterval)
+{
+    if (!plot || signal.isEmpty())
+        return;
+
+    double Fs = 1.0 / sampleInterval;
+
+    int N = nextPowerOfTwo(signal.size());
+    std::vector<std::complex<double>> data(N);
+
+    for (int i = 0; i < signal.size(); i++)
+        data[i] = signal[i];
+    for (int i = signal.size(); i < N; i++)
+        data[i] = 0;
+
+    fftRecursive(data);
+
+    int half = N / 2;
+    QVector<double> freq(half), mag(half);
+
+    for (int k = 0; k < half; k++)
+    {
+        double amplitude = std::abs(data[k]);
+        amplitude = (k == 0 ? amplitude / N : (2.0 * amplitude / N));
+
+        freq[k] = k * (Fs / N);
+        mag[k]  = amplitude;
+    }
+
+    plot->graph(0)->setData(freq, mag);
+    plot->xAxis->setRange(0, Fs / 2);
+    plot->yAxis->rescale(true);
+    plot->replot();
+}
+
 
 
 
@@ -1515,3 +1676,35 @@ void MainWindow::on_pushButton_clearPlots_clicked()
 
      writeToNotes("All log plots are cleared.");
 }
+
+void MainWindow::on_pushButton_fitToScreen_fft_clicked()
+{
+    // X FFT
+    ui->customPlot_adxl_x_FFT->rescaleAxes();
+    ui->customPlot_adxl_x_FFT->replot();
+
+    // Y FFT
+    ui->customPlot_adxl_y_FFT->rescaleAxes();
+    ui->customPlot_adxl_y_FFT->replot();
+
+    // Z FFT
+    ui->customPlot_adxl_z_FFT->rescaleAxes();
+    ui->customPlot_adxl_z_FFT->replot();
+}
+
+
+void MainWindow::on_pushButton_clearPoints_fft_clicked()
+{
+    // X FFT
+    ui->customPlot_adxl_x_FFT->clearItems();
+    ui->customPlot_adxl_x_FFT->replot();
+
+    // Y FFT
+    ui->customPlot_adxl_y_FFT->clearItems();
+    ui->customPlot_adxl_y_FFT->replot();
+
+    // Z FFT
+    ui->customPlot_adxl_z_FFT->clearItems();
+    ui->customPlot_adxl_z_FFT->replot();
+}
+
