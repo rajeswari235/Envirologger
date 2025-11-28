@@ -27,6 +27,9 @@
 #include <complex>
 #include <vector>
 #include <cmath>
+#include "kiss_fft.h"
+#include <QString>
+
 
 
 
@@ -90,16 +93,13 @@ public:
    void initializeSensorVectors();
 
    // FFT helpers as class member functions
-   int nextPowerOfTwo(int v);
+   void computeAndPlotFFT(const QVector<double>& signal,
+                          double Fs,
+                          QCustomPlot *plot);
 
-   void fftRecursive(std::vector<std::complex<double>> &a);
-
-   void plotFFT(const QVector<double> &signal,
-                QCustomPlot *plot,
-                double sampleInterval = 0.1);
-
-   void setupFFTPlot(QCustomPlot *plot, const QString &xLabel);
-
+   void on_pushButton_clearPoints_fft_clicked();
+    void on_pushButton_fitToScreen_fft_clicked();
+    void removeDC(QVector<double> &x);
 
 private slots:
         void onPortSelected(const QString &portName);
@@ -113,6 +113,7 @@ private slots:
         void handleTimeout();
 
         void onDataReceived();
+
 
         void on_pushButton_calibrateScreen_clicked();
 
@@ -134,9 +135,58 @@ private slots:
 
         void on_pushButton_clearPlots_clicked();
 
-        void on_pushButton_fitToScreen_fft_clicked();
 
-        void on_pushButton_clearPoints_fft_clicked();
+       // void on_tabWidget_currentChanged(int index);
+
+        void on_pushButton_logTime_clicked();
+
+        void on_pushButton_setthreshold_clicked();
+
+        void on_pushButton_setTime_clicked();
+
+        void on_pushButton_ADXLfrequency_clicked();
+
+        void on_pushButton_inclinometerFrequency_clicked();
+
+        void on_pushButton_remainingLogs_clicked();
+
+        void on_pushButton_on_clicked();
+
+        void on_pushButton_off_clicked();
+
+        void blinkWidget(QWidget *w);
+
+        void on_pushButton_currentParameters_clicked();
+
+        //fft functions
+
+        void applyHanning(QVector<double> &signal);
+        void performFFT(const QVector<double> &input,
+                        QVector<double> &magnitude,
+                        QVector<double> &freqAxis,
+                        double sampleRate);
+//        QVector<double>generateSineWave(double frequency,
+//                                                     double amplitude,
+//                                                     double durationSeconds,
+//                                                     double sampleRate);
+//        QVector<double>generateSineWave(double freq1,
+//                                                     double amp1,
+//                                                     double freq2,
+//                                                     double amp2,
+//                                                     double durationSeconds,
+//                                                     double sampleRate);
+       void setupFFTPlot(QCustomPlot *plot, const QString &xLabel);
+
+
+
+       void on_spinBox_samplingfrequency_valueChanged(int arg1);
+
+       void on_spinBox_Inclinometer_valueChanged(int arg1);
+
+     //  void testPureSineFFT(int N, double Fs, double f, QCustomPlot *plot);
+
+
+       void on_pushButton_erase_clicked();
 
 signals:
     void sendMsgId(quint8 id);
@@ -144,10 +194,17 @@ signals:
 private:
     Ui::MainWindow *ui;
     serialPortHandler *serialObj;
+    QTimer timer;
+    QCustomPlot *fftPlot;
+    QList<QCPItemTracer*> fftTracers;
+    QList<QCPItemText*>   fftLabels;
+
 
     //Log handling
     static QFile logFile;
     static QTextStream logStream;
+    void setupPlot(QCustomPlot *plot, const QString &xLabel, const QString &yLabel,bool noClearGraph=0);
+
 
     //Response Time waiting timer
      QTimer *responseTimer = nullptr; // Timer to track response timeout
@@ -158,6 +215,7 @@ private:
      QDialog *dlg = nullptr;
 
      QDialog *dlgPlot = nullptr;
+      QDialog *eraseDlg=nullptr;
 
      // --- ADXL ---
      QVector<double> finalAdxlIndex;
@@ -174,6 +232,13 @@ private:
      QVector<double> finalInclX;
      QVector<double> finalInclY;
 
+     QList<QByteArray> packet32List;
+     QList<QByteArray> packet4100AdxlList;
+     QList<QByteArray> packet4100InclList;
+     QList<QByteArray> packetTemperatureList;
+
+     quint16 adxlFreq;
+     quint16 inclinometerFreq;
 
 };
 #endif // MAINWINDOW_H

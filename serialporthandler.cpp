@@ -140,6 +140,7 @@ void serialPortHandler::readData()
     //powerId to avoid that warning QByteRef calling out of bond error
     quint8 powerId = 0x00;
 
+
     if(msgId == 0x01)
     {
         qDebug()<<buffer.size()<<" :size";
@@ -202,7 +203,7 @@ void serialPortHandler::readData()
     {
         qDebug() << "msgId:" <<hex<<msgId;
 
-        if(buffer.startsWith(QByteArray::fromHex("AA BB")))
+        if(buffer.startsWith(QByteArray::fromHex("AA BB")) && buffer.endsWith(QByteArray::fromHex("65 6E 64 FF EF EE")))
         {
             powerId = 0x03;
             ResponseData = buffer;
@@ -211,7 +212,7 @@ void serialPortHandler::readData()
         }
         else
         {
-            executeWriteToNotes("Required continuous bytes with header AA BB, bytes Received bytes: "+QString::number(buffer.size()));
+            executeWriteToNotes("Required  bytes with header AA BB and footer 65 6E 64 FF EF EE, bytes Received bytes: "+QString::number(buffer.size()));
         }
     }
     else if(msgId == 0x04)
@@ -230,11 +231,112 @@ void serialPortHandler::readData()
             executeWriteToNotes("Required 3, bytes Received bytes: "+QString::number(buffer.size()));
         }
     }
+    else if(msgId == 0x05){
+        qDebug() << "msgId:" <<hex<<msgId;
+
+        if(buffer.startsWith(QByteArray::fromHex("53 54 54")))
+        {
+            powerId = 0x05;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Remaining cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else
+        {
+            executeWriteToNotes("Required 3, bytes Received bytes: "+QString::number(buffer.size()));
+        }
+
+    }
+    else if(msgId ==0x06){
+          qDebug() << "msgId:" <<hex<<msgId;
+        if(buffer.startsWith(QByteArray::fromHex("53 54 55"))){
+            powerId = 0x06;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("System on Data cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+
+        }
+        else{
+            executeWriteToNotes("Required 3, bytes Received bytes: "+QString::number(buffer.size()));
+        }
+
+    }
+    else if(msgId==0x07){
+        qDebug()<<"msg Id:"<<hex<<msgId;
+        if(buffer.startsWith(QByteArray::fromHex("54 53 41 43 4B"))){
+            powerId=0x07;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Erase command Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer==(QByteArray::fromHex("54 53 44 4F 4E 45"))){
+            powerId=0x07;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Erase command Received bytes:"+ResponseData.toHex(' ').toUpper());
+
+        }
+    }
+    else if(msgId==0x08){
+        qDebug()<<"msg Id:"<<hex<<msgId;
+        if(buffer.startsWith(QByteArray::fromHex("53 54 47"))){
+            powerId=0x08;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("power on command Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+
+    }
+    else if(msgId==0x09){
+        qDebug()<<"msg Id:"<<hex<<msgId;
+        if(buffer.startsWith(QByteArray::fromHex("53 54 48"))){
+            powerId=0x09;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("power off command Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+    }
+    else if(msgId==0x10){
+        qDebug()<<"msg Id:"<<hex<<msgId;
+        if(buffer.startsWith(QByteArray::fromHex("53 54 44"))){
+            powerId=0x10;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("log Time Response Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer.startsWith(QByteArray::fromHex("53 54 51"))){
+            powerId=0x10;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Threshold Response Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer.startsWith(QByteArray::fromHex("53 54 49"))){
+            powerId=0x10;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Set Time Response Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer.startsWith(QByteArray::fromHex("53 54 52"))){
+            powerId=0x10;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("ADXL Sampling frequency Response Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer.startsWith(QByteArray::fromHex("53 54 53"))){
+            powerId=0x10;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Inclinometer frequency Response Received bytes:"+ResponseData.toHex(' ').toUpper());
+        }
+    }
+
+
     else
     {
         //do nothing
         qDebug()<<"do nothing not a specified size/unknown msgId";
         executeWriteToNotes("Fatal Error 404");
+
     }
 
 
@@ -249,7 +351,7 @@ void serialPortHandler::readData()
 
     case 0x02:
     {
-        emit guiDisplay(ResponseData);
+        emit guiDisplay(ResponseData+"BAL");
     }
         break;
 
@@ -264,7 +366,36 @@ void serialPortHandler::readData()
         emit guiDisplay(ResponseData);
     }
         break;
-
+    case 0x05:
+    {
+        emit guiDisplay(ResponseData);
+    }
+      break;
+    case 0x06:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
+     case 0x07:
+    {
+        emit guiDisplay(ResponseData+"RAJ");
+     }
+        break;
+      case 0x08:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
+    case 0x09:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
+     case 0x10:
+    {
+        emit guiDisplay(ResponseData);
+    }
+        break;
     default:
     {
         qDebug() << "Unknown powerId: " <<hex << powerId << " with data: " << ResponseData.size();
