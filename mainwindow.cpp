@@ -43,6 +43,8 @@ MainWindow::MainWindow(QWidget *parent)
     //gui display signal
     connect(serialObj,&serialPortHandler::guiDisplay,this,&MainWindow::showGuiData);
 
+    connect(serialObj,&serialPortHandler::liveData,this,&MainWindow::dataProcessing);
+
     connect(ui->pushButton_fitToScreen_fft,&QPushButton::clicked,
             this,
             &MainWindow::on_pushButton_fitToScreen_fft_clicked);
@@ -183,6 +185,10 @@ void MainWindow::onPortSelected(const QString &portName)
 void MainWindow::handleTimeout()
 {
     QMessageBox::warning(this, "Timeout", "Hardware Not Responding!");
+    if(dlgPlot){
+        dlgPlot->close();
+        dlgPlot=nullptr;
+    }
 }
 
 void MainWindow::onDataReceived()
@@ -535,6 +541,7 @@ void MainWindow::makePacket32UI(QList<QByteArray> &rawPacket32List)
         quint8 lowByte  = static_cast<quint8>(Item1[3]);
 
         quint16 eventId = (highByte << 8) | lowByte;
+        this->eventId=eventId;
 
         ui->lineEdit_eventId->setText(QString::number(eventId));
 
@@ -556,7 +563,7 @@ void MainWindow::makePacket32UI(QList<QByteArray> &rawPacket32List)
         quint8 lowByteInclinometer  = static_cast<quint8>(Item1[7]);
 
         quint16 InclinometerFreq = (highByteInclinometer << 8) | lowByteInclinometer;
-        this->inclinometerFreq=inclinometerFreq;
+        this->InclinometerFreq=InclinometerFreq;
 
         qDebug()<<adxlFreq<<" :adxlFreq";
         qDebug()<<InclinometerFreq<<" :InclinometerFreq";
@@ -621,6 +628,8 @@ void MainWindow::makePacket32UI(QList<QByteArray> &rawPacket32List)
 
             ui->lineEdit_startTime->setText(formattedStart);
             ui->lineEdit_endTime->setText(formattedEnd);
+            this->formattedStart=formattedStart;
+            this->formattedEnd=formattedEnd;
 
             QString displayAdxlfreq;
             QString displayInclinometerfreq;
@@ -645,11 +654,11 @@ void MainWindow::makePacket32UI(QList<QByteArray> &rawPacket32List)
 
             if(InclinometerFreq < 101)
             {
-                displayInclinometerfreq=QString::number(1.0/adxlFreq)+" s";
+                displayInclinometerfreq=QString::number(1.0/InclinometerFreq)+" s";
             }
             else if(InclinometerFreq > 100 and InclinometerFreq < 1001 )
             {
-                displayInclinometerfreq=QString::number((1.0/adxlFreq)*1000)+" ms";
+                displayInclinometerfreq=QString::number((1.0/InclinometerFreq)*1000)+" ms";
             }
             else
             {
@@ -792,7 +801,6 @@ void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100Adxl
     plotGraph(ui->customPlot_adxl_x, sampleIndex, xAdxl);
     plotGraph(ui->customPlot_adxl_y, sampleIndex, yAdxl);
     plotGraph(ui->customPlot_adxl_z, sampleIndex, zAdxl);
-
     // --- Plot Temperature ---
     plotGraph(ui->customPlot_temperature, tempIndex, temperatureValues);
 
@@ -930,31 +938,49 @@ void MainWindow::saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
     headerFormat.setFontBold(true);
     headerFormat.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
     headerFormat.setBorderStyle(QXlsx::Format::BorderThin);
+    QXlsx::Format headerFormat1;
+    headerFormat1.setFontBold(true);
+    headerFormat1.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
+    headerFormat1.setBorderStyle(QXlsx::Format::BorderThin);
+    headerFormat1.setFontSize(16);
 
     // ---------- DATA FORMAT ----------
     QXlsx::Format dataFormat;
     dataFormat.setBorderStyle(QXlsx::Format::BorderThin);
 
     // ---------------- HEADERS ----------------
-    xlsx.write("A1", "Samples", headerFormat);
-    xlsx.write("B1", "ADXL X (g)",   headerFormat);
-    xlsx.write("C1", "ADXL Y (g)",   headerFormat);
-    xlsx.write("D1", "ADXL Z (g)",   headerFormat);
+    xlsx.mergeCells("A1:B1");
+    xlsx.write("A1","Raw  Sensor Data",headerFormat1);
+    xlsx.write("A2","Event ID",headerFormat);
+    xlsx.write("B2",eventId);
+    xlsx.write("D2","StartTime",headerFormat);
+    xlsx.write("E2",formattedStart);
+    xlsx.write("G2","EndTime",headerFormat);
+    xlsx.write("H2",formattedEnd);
+    xlsx.write("A3","ADXL freq",headerFormat);
+    xlsx.write("B3",adxlFreq);
+    xlsx.write("D3","Inclinometer freq",headerFormat);
+    xlsx.write("E3",InclinometerFreq);
 
-    xlsx.write("F1", "Temp Index",   headerFormat);
-    xlsx.write("G1", "Temperature (°C)", headerFormat);
+    xlsx.write("A5", "Samples", headerFormat);
+    xlsx.write("B5", "ADXL X (g)",   headerFormat);
+    xlsx.write("C5", "ADXL Y (g)",   headerFormat);
+    xlsx.write("D5", "ADXL Z (g)",   headerFormat);
 
-    xlsx.write("I1", "Incl Index",   headerFormat);
-    xlsx.write("J1", "Incl X (deg)", headerFormat);
-    xlsx.write("K1", "Incl Y (deg)", headerFormat);
+    xlsx.write("F5", "Temp Index",   headerFormat);
+    xlsx.write("G5", "Temperature (°C)", headerFormat);
+
+    xlsx.write("I5", "Incl Index",   headerFormat);
+    xlsx.write("J5", "Incl X (deg)", headerFormat);
+    xlsx.write("K5", "Incl Y (deg)", headerFormat);
 
     // ---------- COLUMN WIDTHS ----------
     xlsx.setColumnWidth(1, 1, 12);   // Index
-    xlsx.setColumnWidth(2, 4, 15);   // ADXL X,Y,Z
-    xlsx.setColumnWidth(6, 7, 15);   // Temperature
-    xlsx.setColumnWidth(9, 11, 15);  // Inclinometer
+    xlsx.setColumnWidth(2, 4, 16);   // ADXL X,Y,Z
+    xlsx.setColumnWidth(6, 7, 16);   // Temperature
+    xlsx.setColumnWidth(9, 11, 16);  // Inclinometer
 
-    int row = 2;
+    int row = 6;
 
     // ------------ ADXL Values --------------
     for (int i = 0; i < xAdxl.size(); i++)
@@ -967,7 +993,7 @@ void MainWindow::saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
     }
 
     // ------------ Temperature Values --------------
-    int tRow = 2;
+    int tRow = 6;
     for (int i = 0; i < temperature.size(); i++)
     {
         xlsx.write(tRow, 6, tempIndex[i],   dataFormat);
@@ -976,7 +1002,7 @@ void MainWindow::saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
     }
 
     // ------------ Inclinometer Values --------------
-    int iRow = 2;
+    int iRow = 6;
     for (int i = 0; i < inclX.size(); i++)
     {
         xlsx.write(iRow, 9,  inclIndex[i], dataFormat);
@@ -1289,7 +1315,7 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
     }
 
     // Start Log Initial Command msgId 0x02
-    else if(data.startsWith(QByteArray::fromHex("54 53 41 43 4B"))&&data.endsWith("BAL"))
+    else if(data==QByteArray::fromHex("54 53 41 43 4B"))
     {
         dlg = createPleaseWaitDialog("⏳ Please Wait Data Logging ...",ui->spinBox_logTime->value());
 //        QTimer::singleShot(12000,[this](){
@@ -1503,7 +1529,7 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
 
 
     }
-    else if(data.startsWith(QByteArray::fromHex("54 53 41 43 4B"))&&data.endsWith(("RAJ"))){
+    else if(data==QByteArray::fromHex("54 53 41 43 4C")){
         eraseDlg = createPleaseWaitDialog("⏳ Please Wait... !!!");
 
     }
@@ -2101,9 +2127,16 @@ void MainWindow::on_pushButton_erase_clicked()
 {
     responseTimer->start(2000);
     QByteArray eraseCmd=QByteArray::fromHex("535441");
-    serialObj->writeData(eraseCmd);
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "Confirm", "Do you want to Erase logs?",
+                                  QMessageBox::Yes | QMessageBox::No);
+    if (reply == QMessageBox::Yes) {
     emit sendMsgId(0x07);
-
+    serialObj->writeData(eraseCmd);
+    }
+    else{
+       QMessageBox::information(this,"Cancelled","User cancel the erase logs");
+    }
 }
 void MainWindow::on_pushButton_on_clicked()
 {
@@ -2279,107 +2312,267 @@ void MainWindow::computeAndPlotFFT(const QVector<double>& signal,
     }
 }
 
-
-//QVector<double> MainWindow::generateSineWave(double freq1,
-//                                             double amp1,
-//                                             double freq2,
-//                                             double amp2,
-//                                             double durationSeconds,
-//                                             double sampleRate)
-//{
-//    int N = durationSeconds * sampleRate;   // total number of samples
-//    QVector<double> signal(N);
-
-//    for (int n = 0; n < N; n++)
-//    {
-//        double t = n / sampleRate;  // time index
-
-//        // Combine two sine waves
-//        double s1 = amp1 * sin(2.0 * M_PI * freq1 * t);
-//        double s2 = amp2 * sin(2.0 * M_PI * freq2 * t);
-
-//        signal[n] = s1 + s2;   // final signal
-//    }
-
-//    return signal;
-//}
-
-
-void MainWindow::on_spinBox_samplingfrequency_valueChanged(int arg1)
+void MainWindow::dataProcessing(const QByteArray &byteArrayData)
 {
-    quint16 value1 = ui->spinBox_samplingfrequency->value();
+    QByteArray data=byteArrayData;
+    int i =0;
+    int invalidHeaderCount=0;
+    QByteArray packet4100Adxl;
+    QByteArray packet4100Incl;
 
-    double timeUnit = (value1 == 0) ? 0.0 : (1.0/ value1);
+    if(data.startsWith(QByteArray::fromHex("CC DD FF"))&&data.endsWith("FF EE FF"))
+    {
+        if (i + 4100 <= data.size())
+        {
+            QByteArray packet4100 = data.mid(i, 4100);
+            if (packet4100.endsWith(QByteArray::fromHex("FF EE FF")))
+            {
+                if(packet4100.contains(QByteArray::fromHex("FF FF FF FF FF FF")))
+                {
+                    // Special condition FF's checking
+                    QByteArray specialPacket = packet4100;
+
+                    qDebug()<<"Consecutive FF's detected at packet [ADXL]: "+QString::number(packet4100Adxl.size());
+                    writeToNotes("Consecutive FF's detected at packet [ADXL]: " + QString::number(packet4100Adxl.size()));
 
 
-    QString label = QString("Time (1 = %1 ms)").arg(timeUnit);
+                    int fIndex = specialPacket.indexOf(QByteArray::fromHex("FF FF FF FF FF FF"));
+                    qDebug()<<fIndex<<" :fIndex";
 
-    if (value1 == 0)
-        label = "Time (1 = N/A)";
-    else
-        label = QString("Time (1 = %1 ms)").arg(timeUnit, 0, 'f', 1);
-    ui->customPlot_adxl_x->xAxis->setLabel(QString("ADXL X %1").arg(label));
-    ui->customPlot_adxl_x->replot(QCustomPlot::rpQueuedReplot);
-    ui->customPlot_adxl_y->xAxis->setLabel(QString("ADXL Y %1").arg(label));
-    ui->customPlot_adxl_y->replot(QCustomPlot::rpQueuedReplot);
-    ui->customPlot_adxl_z->xAxis->setLabel(QString("ADXL Z %1").arg(label));
-    ui->customPlot_adxl_z->replot(QCustomPlot::rpQueuedReplot);
+                    qDebug()<< "Removing ff bytes count [ADXL]: " << (specialPacket.size() - fIndex) - 5;
+                    writeToNotes("Removing ff bytes count [ADXL]: " + QString::number((specialPacket.size() - fIndex) - 5));
 
-    double timeUnit_temp = (value1 == 0) ? 0.0 : (682.0/ value1);
-    QString label_temp;
+                    specialPacket.remove(fIndex,(specialPacket.size() - fIndex) - 5);
 
-    if (value1 == 0)
-        label_temp = "(1 = N/A)";
-    else
-        label_temp = QString("(1 = %1 ms)").arg(timeUnit_temp, 0, 'f', 1);
 
-    ui->customPlot_temperature->xAxis->setLabel(QString("Samples %1").arg(label_temp));
-    ui->customPlot_temperature->replot(QCustomPlot::rpQueuedReplot);
+                    packet4100Adxl.append(specialPacket);
+                    qDebug()<<specialPacket.toHex(' ').toUpper()<<" :specialPacket";
+
+                    // writeToNotes Log
+                    writeToNotes("fIndex (start of FFs) [ADXL]: " + QString::number(fIndex));
+                    writeToNotes("specialPacket [ADXL]: " + specialPacket.toHex(' ').toUpper());
+                }
+                else
+                {
+                    // Normal condition
+                    packet4100Adxl.append(packet4100);
+                }
+
+                // Extract last 2 bytes before footer as temperature
+                QByteArray tempBytes = packet4100.mid(4100 - 5, 2);
+                packetTemperatureList.append(tempBytes);
+            }
+            else
+            {
+                invalidHeaderCount++;
+            }
+        }
+
+
 }
+    else if(data.startsWith(QByteArray::fromHex("EE FF FF")))
+    {
+                 QByteArray packet4100 = data;
+                if (packet4100.endsWith(QByteArray::fromHex("FF CC DD")))
+                {
+                    if(packet4100.contains(QByteArray::fromHex("FF FF FF FF FF FF")))
+                    {
+                        // Special condition FF's checking
+                        QByteArray specialPacket = packet4100;
 
-void MainWindow::on_spinBox_Inclinometer_valueChanged(int arg1)
+                        qDebug()<<"Consecutive FF's detected at packet [INCLINOMETER]: "+QString::number(packet4100Incl.size());
+                        writeToNotes("Consecutive FF's detected at packet [INCLINOMETER]: " + QString::number(packet4100Incl.size()));
+
+
+                        int fIndex = specialPacket.indexOf(QByteArray::fromHex("FF FF FF FF FF FF"));
+                        qDebug()<<fIndex<<" :fIndex";
+
+                        qDebug()<< "Removing ff bytes count [INCLINOMETER]: " << (specialPacket.size() - fIndex) - 5;
+                        writeToNotes("Removing ff bytes count [INCLINOMETER]: " + QString::number((specialPacket.size() - fIndex) - 5));
+
+                        specialPacket.remove(fIndex,(specialPacket.size() - fIndex) - 5);
+
+
+                        packet4100Incl.append(specialPacket);
+                        qDebug()<<specialPacket.toHex(' ').toUpper()<<" :specialPacket";
+
+                        // writeToNotes Log
+                        writeToNotes("fIndex (start of FFs) [INCLINOMETER]: " + QString::number(fIndex));
+                        writeToNotes("specialPacket [INCLINOMETER]: " + specialPacket.toHex(' ').toUpper());
+                    }
+                    else
+                    {
+                        // Normal condition
+                        packet4100Incl.append(packet4100);
+                    }
+                }
+                else
+                {
+                    invalidHeaderCount++;
+                }
+
+            }
+
+    makePacket4100AdxlLive(packet4100Adxl);
+    makePacket4100InclLive(packet4100Incl);
+
+}
+void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
 {
-    int inclinometer = ui->spinBox_Inclinometer->value();
-       double timeUnit_inclinometer = (inclinometer == 0) ? 0.0 : (1.0 / inclinometer);
-       QString label2 = (inclinometer == 0) ? "(1 = N/A)"
-                                     : QString("(1 = %1 ms)").arg( timeUnit_inclinometer);
-    ui->customPlot_inclinometer_x->xAxis->setLabel(QString("Inclinometer Time X %1").arg(label2));
-    ui->customPlot_inclinometer_x->replot(QCustomPlot::rpQueuedReplot);
-    ui->customPlot_inclinometer_y->xAxis->setLabel(QString("Inclinometer Time Y %1").arg(label2));
-    ui->customPlot_inclinometer_y->replot(QCustomPlot::rpQueuedReplot);
+    QVector<double> sampleIndex;
+    QVector<double> xAdxl, yAdxl, zAdxl;
+    int globalSample = 1;
+
+    // --- ADXL Data Processing ---
+
+        QByteArray packet = rawPacket4100Adxl;
+
+        if (packet.size() < 20)
+        {
+            qDebug() << "Skipping too short ADXL packet:" << packet.size();
+            return;
+        }
+
+        QByteArray trimmed = packet.mid(3);
+        if (trimmed.size() > 3) trimmed.chop(3); // remove footer
+        if (trimmed.size() > 2) trimmed.chop(2); // remove temperature bytes
+
+        int usableSize = trimmed.size();
+        if (usableSize < 6)
+        {
+            qDebug() << "Packet too short after trimming:" << usableSize;
+            return;
+        }
+
+        for (int i = 0; i + 5 < usableSize; i += 6)
+        {
+            qint16 xRaw = (static_cast<quint8>(trimmed[i])     << 8) | static_cast<quint8>(trimmed[i + 1]);
+            qint16 yRaw = (static_cast<quint8>(trimmed[i + 2]) << 8) | static_cast<quint8>(trimmed[i + 3]);
+            qint16 zRaw = (static_cast<quint8>(trimmed[i + 4]) << 8) | static_cast<quint8>(trimmed[i + 5]);
+
+            // Keep last 12 bits only first 4 bits eliminate in a 16 bit integer
+            xRaw &= 0x0FFF;
+            yRaw &= 0x0FFF;
+            zRaw &= 0x0FFF;
+
+            sampleIndex.append(globalSample++);
+            xAdxl.append((xRaw * 3.3 * 2) / 4096.0);
+            yAdxl.append((yRaw * 3.3 * 2) / 4096.0);
+            zAdxl.append((zRaw * 3.3 * 2) / 4096.0);
+        }
+    for(int g=0;g<xAdxl.size();g++){
+        xAdxl[g]=(xAdxl[g]-1.65)/0.0063;
+        yAdxl[g]=(yAdxl[g]-1.65)/0.0063;
+        zAdxl[g]=(zAdxl[g]-1.65)/0.0063;
+
+    }
+
+    qDebug() << "Total ADXL samples:" << sampleIndex.size();
+
+    // --- Plotting Helper ---
+    auto plotGraph = [](QCustomPlot *plot, const QVector<double> &x, const QVector<double> &y)
+    {
+        if (plot->graphCount() > 0)
+        {
+            plot->graph(0)->setData(x, y);
+            plot->rescaleAxes();
+            plot->replot();
+        }
+    };
+
+    // --- Plot ADXL ---
+    plotGraph(ui->customPlot_adxl_x_live, sampleIndex, xAdxl);
+    plotGraph(ui->customPlot_adxl_y_live, sampleIndex, yAdxl);
+    plotGraph(ui->customPlot_adxl_z_live, sampleIndex, zAdxl);
+
+    // --- FFT Plot ---
+    double Fs = adxlFreq;
+
+    qDebug() << "Debug 1";
+
+    try {
+        computeAndPlotFFT(xAdxl, Fs, ui->customPlot_adxl_x_FFT);
+    }
+    catch (std::exception &ex) {
+        qCritical() << "computeAndPlotFFT exception:" << ex.what();
+    }
+    catch (...) {
+        qCritical() << "computeAndPlotFFT unknown crash";
+    }
+
+    qDebug() << "Debug 2";
+
+
+    computeAndPlotFFT(yAdxl, Fs, ui->customPlot_adxl_y_FFT);
+    computeAndPlotFFT(zAdxl, Fs, ui->customPlot_adxl_z_FFT);
+
 }
-// create a pure sine: Fs=10000, f=1000, N = whatever you use
-//void MainWindow::testPureSineFFT(int N, double Fs, double f, QCustomPlot *plot)
-//{
-//    QVector<double> sig(N);
-//    for (int n = 0; n < N; ++n)
-//        sig[n] = sin(2*M_PI*f*n / Fs);
+void MainWindow::makePacket4100InclLive(const QByteArray &rawPacket4100Incl)
+{
+    QVector<double> sampleIndex;
+    QVector<double> inclX, inclY;
+    int globalSample = 1;
+    QByteArray packet = rawPacket4100Incl;
 
-//    // Ensure no DC
-//    // removeDC(sig); // not needed for pure sine
+    if (packet.size() < 20)
+    {
+        qDebug() << "Skipping too short Inclinometer packet:" << packet.size();
+       return;
+    }
 
-//    // Option A: windowed
-//    QVector<double> win = sig;
-//    applyHanning(win);
+    // Remove header (3 bytes)
+    QByteArray trimmed = packet.mid(3);
 
-//    // Option B: unwindowed (for comparison)
-//    QVector<double> magW, freqW, magU, freqU;
-//    performFFT(win, magW, freqW, Fs);
-//    performFFT(sig, magU, freqU, Fs);
+    // Remove footer (3 bytes)
+    if (trimmed.size() > 3)
+        trimmed.chop(3);
 
-//    // Plot windowed result
-//    if (plot->graphCount() == 0) plot->addGraph();
-//    plot->graph(0)->setData(freqW, magW);
-//    plot->xAxis->setRange(0, Fs/2);
-//    plot->yAxis->rescale();
-//    plot->replot();
+    // Remove last 2 dummy bytes before footer
+    if (trimmed.size() > 2)
+        trimmed.chop(2);
 
-//    qDebug() << "PureSine test: N=" << N << " Fs=" << Fs << " f=" << f;
-//}
+    int usableSize = trimmed.size();
+    if (usableSize < 4)
+    {
+        qDebug() << "Packet too short after trimming:" << usableSize;
+       return;
+    }
 
+        // Process each 4-byte sample (Xg, Yg)
+        for (int i = 0; i + 3 < usableSize; i += 4)
+        {
+            qint16 xRaw = (static_cast<quint8>(trimmed[i + 1])     << 8) | static_cast<quint8>(trimmed[i]);
+            qint16 yRaw = (static_cast<quint8>(trimmed[i + 3]) << 8) | static_cast<quint8>(trimmed[i + 2]);
 
+            // Convert to g-values
+            double xg = (xRaw * 0.031) / 1000.0;
+            double yg = (yRaw * 0.031) / 1000.0;
 
+            // Clamp to [-1, 1]
+            xg = std::max(-1.0, std::min(1.0, xg));
+            yg = std::max(-1.0, std::min(1.0, yg));
 
+            // Convert to degrees
+            double xDeg = std::asin(xg) * (180.0 / M_PI);
+            double yDeg = std::asin(yg) * (180.0 / M_PI);
 
+            sampleIndex.append(globalSample++);
+            inclX.append(xDeg);
+            inclY.append(yDeg);
+        }
+    qDebug() << "Total Incl samples:" << sampleIndex.size();
 
+    // --- Plotting ---
+    auto plotGraph = [](QCustomPlot *plot, const QVector<double> &x, const QVector<double> &y)
+    {
+        if (plot->graphCount() > 0)
+        {
+            plot->graph(0)->setData(x, y);
+            plot->rescaleAxes();
+            plot->replot();
+        }
+    };
 
+    plotGraph(ui->customPlot_incl_x_live, sampleIndex, inclX);
+    plotGraph(ui->customPlot_incl_y_live, sampleIndex, inclY);
+}

@@ -187,13 +187,27 @@ void serialPortHandler::readData()
             buffer.clear();
             executeWriteToNotes("Start Log Initial cmd received bytes: "+ResponseData.toHex(' ').toUpper());
         }
+        else if(buffer.startsWith(QByteArray::fromHex("CC DD FF")) and buffer.endsWith(QByteArray::fromHex("FF EE FF")))
+        {
+            powerId=0x0B;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Live plot ADXL received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer.startsWith(QByteArray::fromHex("EE FF FF")) and buffer.endsWith(QByteArray::fromHex("FF CC DD")))
+        {
+            powerId=0x0B;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Live plot Inclinometer received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
         else if(buffer == QByteArray::fromHex("54 53 50"))
         {
             powerId = 0x02;
             ResponseData = buffer;
             buffer.clear();
             executeWriteToNotes("Start Log End cmd received bytes: "+ResponseData.toHex(' ').toUpper());
-        }
+        }       
         else
         {
             executeWriteToNotes("Required 3, bytes Received bytes: "+QString::number(buffer.size()));
@@ -263,7 +277,7 @@ void serialPortHandler::readData()
     }
     else if(msgId==0x07){
         qDebug()<<"msg Id:"<<hex<<msgId;
-        if(buffer.startsWith(QByteArray::fromHex("54 53 41 43 4B"))){
+        if(buffer.startsWith(QByteArray::fromHex("54 53 41 43 4C"))){
             powerId=0x07;
             ResponseData=buffer;
             buffer.clear();
@@ -351,7 +365,7 @@ void serialPortHandler::readData()
 
     case 0x02:
     {
-        emit guiDisplay(ResponseData+"BAL");
+        emit guiDisplay(ResponseData);
     }
         break;
 
@@ -378,7 +392,7 @@ void serialPortHandler::readData()
         break;
      case 0x07:
     {
-        emit guiDisplay(ResponseData+"RAJ");
+        emit guiDisplay(ResponseData);
      }
         break;
       case 0x08:
@@ -396,6 +410,10 @@ void serialPortHandler::readData()
         emit guiDisplay(ResponseData);
     }
         break;
+     case 0x0B:
+    {
+        emit liveData(ResponseData);
+    }
     default:
     {
         qDebug() << "Unknown powerId: " <<hex << powerId << " with data: " << ResponseData.size();

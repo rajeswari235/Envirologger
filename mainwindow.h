@@ -80,6 +80,11 @@ public:
     void makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100AdxlList,QList<QByteArray> &rawPacketTemperatureList);
     void makePacket4100InclList(QList<QByteArray> &rawPacket4100InclList);
 
+    void makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl);
+    void makePacket4100InclLive(const QByteArray &rawPacket4100Incl);
+
+
+
     void saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
                                               const QVector<double> &xAdxl,
                                               const QVector<double> &yAdxl,
@@ -108,12 +113,13 @@ private slots:
 
         void showGuiData(const QByteArray &byteArrayData);
 
+        void dataProcessing(const QByteArray &byteArrayData);
+
         //response time handling
 
         void handleTimeout();
 
         void onDataReceived();
-
 
         void on_pushButton_calibrateScreen_clicked();
 
@@ -165,27 +171,8 @@ private slots:
                         QVector<double> &magnitude,
                         QVector<double> &freqAxis,
                         double sampleRate);
-//        QVector<double>generateSineWave(double frequency,
-//                                                     double amplitude,
-//                                                     double durationSeconds,
-//                                                     double sampleRate);
-//        QVector<double>generateSineWave(double freq1,
-//                                                     double amp1,
-//                                                     double freq2,
-//                                                     double amp2,
-//                                                     double durationSeconds,
-//                                                     double sampleRate);
+
        void setupFFTPlot(QCustomPlot *plot, const QString &xLabel);
-
-
-
-       void on_spinBox_samplingfrequency_valueChanged(int arg1);
-
-       void on_spinBox_Inclinometer_valueChanged(int arg1);
-
-     //  void testPureSineFFT(int N, double Fs, double f, QCustomPlot *plot);
-
-
        void on_pushButton_erase_clicked();
 
 signals:
@@ -238,7 +225,10 @@ private:
      QList<QByteArray> packetTemperatureList;
 
      quint16 adxlFreq;
-     quint16 inclinometerFreq;
+     quint16 InclinometerFreq;
+     quint16 eventId;
+     QString formattedStart;
+     QString formattedEnd;
 
 };
 #endif // MAINWINDOW_H
