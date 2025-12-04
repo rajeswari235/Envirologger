@@ -101,6 +101,9 @@ public:
    void computeAndPlotFFT(const QVector<double>& signal,
                           double Fs,
                           QCustomPlot *plot);
+   void plotLiveFFT(const QVector<double>& signal,
+                                double Fs,
+                                QCustomPlot *plot);
 
    void on_pushButton_clearPoints_fft_clicked();
     void on_pushButton_fitToScreen_fft_clicked();
@@ -164,6 +167,11 @@ private slots:
 
         void on_pushButton_currentParameters_clicked();
 
+        void livePlot(QCustomPlot *plot,
+                      const QVector<double> &xValues,
+                      const QVector<double> &yValues,
+                      int Window);
+
         //fft functions
 
         void applyHanning(QVector<double> &signal);
@@ -174,6 +182,21 @@ private slots:
 
        void setupFFTPlot(QCustomPlot *plot, const QString &xLabel);
        void on_pushButton_erase_clicked();
+
+       void on_checkBox_fft_stateChanged(int arg1);
+
+       void on_checkBox_livePlot_stateChanged(int arg1);
+
+       void on_pushButton_stopLivePlot_clicked();
+       void onUiUpdateTimer();
+
+       void saveLiveData(const QVector<double> &xAdxl,
+                                               const QVector<double> &yAdxl,
+                                               const QVector<double> &zAdxl,
+                                               const QVector<double> &inclX,
+                                               const QVector<double> &inclY);
+       
+       void on_pushButton_saveLive_clicked();
 
 signals:
     void sendMsgId(quint8 id);
@@ -229,6 +252,36 @@ private:
      quint16 eventId;
      QString formattedStart;
      QString formattedEnd;
+
+     // threading / buffering / UI-timer
+     QTimer *uiUpdateTimer = nullptr;
+     QMutex dataMutex;
+
+     // Pending buffers filled by packet parser (producer)
+     QVector<double> pending_sampleIndex;
+     QVector<double> pending_xAdxl;
+     QVector<double> pending_yAdxl;
+     QVector<double> pending_zAdxl;
+
+     // Full-history storage 
+     QVector<double> full_xAdxl;
+     QVector<double> full_yAdxl;
+     QVector<double> full_zAdxl;
+     
+     QVector<double> fullInclXL;
+     QVector<double> fullInclYL;
+
+     // flags and tuning
+     bool livePlotEnabled;   // controlled by your livePlot checkbox
+     int uiUpdateIntervalMs = 33;   // ~30 Hz; tune this if needed
+
+     quint16 adxlFreqL;
+     quint16 inclFreqL;
+
+     int adxlWindow = -1;
+     int inclWindow = -1;
+
+
 
 };
 #endif // MAINWINDOW_H

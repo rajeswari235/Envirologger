@@ -25,6 +25,16 @@ MainWindow::MainWindow(QWidget *parent)
     ui->spinBox_samplingfrequency->setToolTip("Enter value from 1 to 20000");
     ui->spinBox_Inclinometer->setToolTip("Enter value from 1 to 1000");
 
+    uiUpdateTimer = new QTimer(this);
+    uiUpdateTimer->setInterval(uiUpdateIntervalMs);
+    connect(uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onUiUpdateTimer);
+    uiUpdateTimer->start();
+
+    livePlotEnabled = ui->checkBox_livePlot->isChecked();
+    connect(ui->checkBox_livePlot, &QCheckBox::stateChanged, this, [this](int) {
+        livePlotEnabled = ui->checkBox_livePlot->isChecked();
+    });
+
     connect(ui->pushButton_clear,&QPushButton::clicked,ui->textEdit_rawBytes,&QTextEdit::clear);
 
     ui->comboBox_ports->addItems(serialObj->availablePorts());
@@ -265,7 +275,7 @@ QDialog* MainWindow::createPleaseWaitDialog(const QString &text, int timeSeconds
     QDialog *dlg = new QDialog(this);
     dlg->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->setModal(true);
+    dlg->setModal(false);
 
     // --- Styling ---
     dlg->setStyleSheet(R"(
@@ -386,6 +396,7 @@ void MainWindow::setupFFTPlot(QCustomPlot *plot, const QString &xLabel)
 
     plot->xAxis->setLabel(xLabel);
     plot->yAxis->setLabel("Amplitude(g)");
+    plot->legend->setVisible(false);
 
     // ---- Bold Axis Labels ----
     QFont labelFont("Arial", 10, QFont::Bold);
@@ -454,6 +465,7 @@ void MainWindow::setupFFTPlot(QCustomPlot *plot, const QString &xLabel)
 
         plot->replot();
     });
+
 }
 
 
@@ -485,10 +497,17 @@ void MainWindow::initializeAllPlots()
     setupPlot(ui->customPlot_adxl_y, QString("ADXL Y %1").arg(adxlFreqLabel), "Voltage (g)");
     setupPlot(ui->customPlot_adxl_z, QString("ADXL Z %1").arg(adxlFreqLabel), "Voltage (g)");
 
-
     ui->customPlot_adxl_x->addGraph(); ui->customPlot_adxl_x->graph(0)->setPen(QPen(adxlColors[0], 1));
     ui->customPlot_adxl_y->addGraph(); ui->customPlot_adxl_y->graph(0)->setPen(QPen(adxlColors[1], 1));
     ui->customPlot_adxl_z->addGraph(); ui->customPlot_adxl_z->graph(0)->setPen(QPen(adxlColors[2], 1));
+
+    setupPlot(ui->customPlot_adxl_x_live,QString("ADXL X"),"Voltage (g)");
+    setupPlot(ui->customPlot_adxl_y_live,QString("ADXL Y"),"Voltage (g)");
+    setupPlot(ui->customPlot_adxl_z_live,QString("ADXL Z"),"Voltage (g)");
+
+    ui->customPlot_adxl_x_live->addGraph(); ui->customPlot_adxl_x_live->graph(0)->setPen(QPen(adxlColors[0], 1));
+    ui->customPlot_adxl_y_live->addGraph(); ui->customPlot_adxl_y_live->graph(0)->setPen(QPen(adxlColors[1], 1));
+    ui->customPlot_adxl_z_live->addGraph(); ui->customPlot_adxl_z_live->graph(0)->setPen(QPen(adxlColors[2], 1));
 
     //  Inclinometer X, Y — degrees vs time (1 unit = 1)
     QString InclinometerFreqLabel = QString("Time (1 = %1)").arg("N/A");
@@ -499,6 +518,13 @@ void MainWindow::initializeAllPlots()
 
     ui->customPlot_inclinometer_x->addGraph(); ui->customPlot_inclinometer_x->graph(0)->setPen(QPen(inclinometerColors[0], 1));
     ui->customPlot_inclinometer_y->addGraph(); ui->customPlot_inclinometer_y->graph(0)->setPen(QPen(inclinometerColors[1], 1));
+
+    setupPlot(ui->customPlot_incl_x_live,QString("Inclinometer X"),"Degrees(°)");
+    setupPlot(ui->customPlot_incl_y_live,QString("Inclinometer Y"),"Degrees(°)");
+
+    ui->customPlot_incl_x_live->addGraph(); ui->customPlot_incl_x_live->graph(0)->setPen(QPen(inclinometerColors[0], 1));
+    ui->customPlot_incl_y_live->addGraph(); ui->customPlot_incl_y_live->graph(0)->setPen(QPen(inclinometerColors[1], 1));
+
 
     //  Temperature — Celsius vs samples
 
@@ -816,9 +842,6 @@ void MainWindow::makePacket4100AdxlTempList(QList<QByteArray> &rawPacket4100Adxl
 
     // --- FFT Plot ---
     double Fs = adxlFreq;
-
-   // testPureSineFFT(200000, 10000.0, 1000.0, ui->customPlot_adxl_z_FFT);
-
     qDebug() << "Debug 1";
 
     try {
@@ -1005,7 +1028,7 @@ void MainWindow::saveAllSensorDataToExcel(const QVector<double> &adxlIndex,
     int iRow = 6;
     for (int i = 0; i < inclX.size(); i++)
     {
-        xlsx.write(iRow, 9,  inclIndex[i], dataFormat);
+        xlsx.write(iRow, 9,  i, dataFormat);
         xlsx.write(iRow, 10, inclX[i],     dataFormat);
         xlsx.write(iRow, 11, inclY[i],     dataFormat);
         iRow++;
@@ -1060,6 +1083,14 @@ void MainWindow::initializeSensorVectors()
     finalInclIndex.clear();
     finalInclX.clear();
     finalInclY.clear();
+
+    //--- Live Data----
+
+    full_xAdxl.clear();
+    full_yAdxl.clear();
+    full_zAdxl.clear();
+    fullInclXL.clear();
+    fullInclYL.clear();
 }
 
 
@@ -1317,7 +1348,10 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
     // Start Log Initial Command msgId 0x02
     else if(data==QByteArray::fromHex("54 53 41 43 4B"))
     {
+        if(!ui->checkBox_livePlot->isChecked())
+         {
         dlg = createPleaseWaitDialog("⏳ Please Wait Data Logging ...",ui->spinBox_logTime->value());
+        }
 //        QTimer::singleShot(12000,[this](){
 //            if(dlg)
 //            {
@@ -1326,6 +1360,7 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
 //                QMessageBox::critical(this,"Failed","Failed To Log Data !");
 //            }
 //        });
+        qDebug()<<"2";
     }
 
     // Start Log End Initial Command msgId 0x02
@@ -1681,6 +1716,8 @@ void MainWindow::on_pushButton_startLog_clicked()
 
     QByteArray command;
 
+    initializeSensorVectors();
+
     command.append(0x53); //1
     command.append(0x54); //2
     command.append(0x42); //3
@@ -1692,6 +1729,7 @@ void MainWindow::on_pushButton_startLog_clicked()
 
     emit sendMsgId(0x02);
     serialObj->writeData(command);
+
 }
 
 void MainWindow::on_pushButton_getLogEvents_clicked()
@@ -2019,8 +2057,8 @@ void MainWindow::on_pushButton_logTime_clicked()
     logTime.append(static_cast<char>(value));      // append value (1 byte)
     logTime.append(static_cast<char>(0xFF));
 
-    serialObj->writeData(logTime);
     emit sendMsgId(0x10);
+    serialObj->writeData(logTime);
 
 
 }
@@ -2041,8 +2079,10 @@ void MainWindow::on_pushButton_setthreshold_clicked()
     threshold.append(static_cast<char>(value & 0xFF));        // low byte second
     threshold.append(static_cast<char>(0xFF));
     qDebug()<<"value send"<<value;
-    serialObj->writeData(threshold);
+
     emit sendMsgId(0x10);
+    serialObj->writeData(threshold);
+
 
 }
 
@@ -2069,8 +2109,10 @@ void MainWindow::on_pushButton_setTime_clicked()
     packet.append(static_cast<char>(minute));
     packet.append(static_cast<char>(second));
     packet.append(static_cast<char>(0xFF));
-    serialObj->writeData(packet);
+
     emit sendMsgId(0x10);
+    serialObj->writeData(packet);
+
 
 
 }
@@ -2289,21 +2331,19 @@ void MainWindow::computeAndPlotFFT(const QVector<double>& signal,
         return;
 
     QVector<double> processed = signal;
-  //  removeDC(processed);
-
     qDebug()<<"Debug 3";
     applyHanning(processed);   // 2. apply window
 
     qDebug()<<"Debug 4";
-    QVector<double> magnitude, freqAxis;
+    QVector<double> mag, freq;
 
     qDebug()<<"Debug 5";
-    performFFT(processed, magnitude, freqAxis, Fs);  // 3. FFT
+    performFFT(processed, mag, freq, Fs);  // 3. FFT
 
     // ---- Plot (correct way) ----
     if (plot->graphCount() > 0)
     {
-        plot->graph(0)->setData(freqAxis, magnitude);
+        plot->graph(0)->setData(freq, mag);
 
         plot->xAxis->setRange(0, Fs/2);   // do NOT auto-rescale X
         plot->yAxis->rescale();           // only Y auto-scale
@@ -2315,18 +2355,38 @@ void MainWindow::computeAndPlotFFT(const QVector<double>& signal,
 void MainWindow::dataProcessing(const QByteArray &byteArrayData)
 {
     QByteArray data=byteArrayData;
-    int i =0;
+
     int invalidHeaderCount=0;
     QByteArray packet4100Adxl;
     QByteArray packet4100Incl;
+    QByteArray temperaturePacket;
 
-    if(data.startsWith(QByteArray::fromHex("CC DD FF"))&&data.endsWith("FF EE FF"))
+    if(data.startsWith(QByteArray::fromHex("AA BB")) and data.endsWith(QByteArray::fromHex("FF FF")))
     {
-        if (i + 4100 <= data.size())
+        quint8 adxlOne=static_cast<quint8>(data[2]);
+        quint8 adxlTwo=static_cast<quint8>(data[3]);
+        quint16 adxlFreqL=adxlOne<<8|adxlTwo;
+        this->adxlFreqL=adxlFreqL;
+
+        quint8 inclOne=static_cast<quint8>(data[4]);
+        quint8 inclTwo=static_cast<quint8>(data[5]);
+        quint16 inclFreqL=inclOne<<8|inclTwo;
+        this->inclFreqL=inclFreqL;
+
+    }
+
+    else if(data.startsWith(QByteArray::fromHex("CC DD FF"))&&data.endsWith(QByteArray::fromHex("EE FF")))
+    {
+        QByteArray data=byteArrayData;
+         writeToNotes("Adxl packet received size:"+QString::number(data.size()));
+        if (4160 <= data.size())
         {
-            QByteArray packet4100 = data.mid(i, 4100);
-            if (packet4100.endsWith(QByteArray::fromHex("FF EE FF")))
+            QByteArray packet4100 = data;
+            if (packet4100.endsWith(QByteArray::fromHex("EE FF")))
             {
+                packet4100.remove(packet4100.size()-62,60);
+
+                writeToNotes("Adxl packet size after removing dummy:"+QString::number(packet4100.size()));
                 if(packet4100.contains(QByteArray::fromHex("FF FF FF FF FF FF")))
                 {
                     // Special condition FF's checking
@@ -2334,7 +2394,6 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
 
                     qDebug()<<"Consecutive FF's detected at packet [ADXL]: "+QString::number(packet4100Adxl.size());
                     writeToNotes("Consecutive FF's detected at packet [ADXL]: " + QString::number(packet4100Adxl.size()));
-
 
                     int fIndex = specialPacket.indexOf(QByteArray::fromHex("FF FF FF FF FF FF"));
                     qDebug()<<fIndex<<" :fIndex";
@@ -2359,8 +2418,15 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
                 }
 
                 // Extract last 2 bytes before footer as temperature
-                QByteArray tempBytes = packet4100.mid(4100 - 5, 2);
-                packetTemperatureList.append(tempBytes);
+                QByteArray tempBytes = packet4100Adxl.mid(packet4100Adxl.size() - 5, 2);
+                temperaturePacket.append(tempBytes);
+                writeToNotes("temperaturaPacket"+temperaturePacket.toHex(' ').toUpper());
+                quint8 templsb=static_cast<quint8>(temperaturePacket[0]);
+                quint8 tempmsb=static_cast<quint8>(temperaturePacket[1]);
+                quint16 temp=templsb<<8|tempmsb;
+                temp &= ~0x0003;
+                double finalTemp=(-46.85 + (175.72 * temp) / 65536.0);
+                ui->lineEdit_temperature->setText(QString::number(finalTemp));
             }
             else
             {
@@ -2368,13 +2434,16 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
             }
         }
 
+     makePacket4100AdxlLive(packet4100Adxl);
 
 }
     else if(data.startsWith(QByteArray::fromHex("EE FF FF")))
     {
                  QByteArray packet4100 = data;
-                if (packet4100.endsWith(QByteArray::fromHex("FF CC DD")))
+                if (packet4100.endsWith(QByteArray::fromHex("CC DD")))
                 {
+                     packet4100.remove(packet4100.size()-62,60);
+
                     if(packet4100.contains(QByteArray::fromHex("FF FF FF FF FF FF")))
                     {
                         // Special condition FF's checking
@@ -2410,18 +2479,15 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
                 {
                     invalidHeaderCount++;
                 }
-
+                makePacket4100InclLive(packet4100Incl);
             }
-
-    makePacket4100AdxlLive(packet4100Adxl);
-    makePacket4100InclLive(packet4100Incl);
-
 }
 void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
 {
     QVector<double> sampleIndex;
     QVector<double> xAdxl, yAdxl, zAdxl;
-    int globalSample = 1;
+    int globalSample = 0;
+    qDebug()<<"Extracting bytes";
 
     // --- ADXL Data Processing ---
 
@@ -2466,58 +2532,41 @@ void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
         zAdxl[g]=(zAdxl[g]-1.65)/0.0063;
 
     }
+    if (adxlWindow < 0) {
+        adxlWindow = sampleIndex.size();
+        qDebug() << "Fixed X-axis window set =" << adxlWindow;
+    }
+
+
+
+        QMutexLocker locker(&dataMutex);
+        pending_sampleIndex += sampleIndex;
+        pending_xAdxl += xAdxl;
+        pending_yAdxl += yAdxl;
+        pending_zAdxl += zAdxl;
+
+        // optionally keep full history for later export
+        full_xAdxl += xAdxl;
+        full_yAdxl += yAdxl;
+        full_zAdxl += zAdxl;
+
+
+    qDebug() << "Total ADXL samples queued:" << pending_sampleIndex.size();
+
 
     qDebug() << "Total ADXL samples:" << sampleIndex.size();
-
-    // --- Plotting Helper ---
-    auto plotGraph = [](QCustomPlot *plot, const QVector<double> &x, const QVector<double> &y)
-    {
-        if (plot->graphCount() > 0)
-        {
-            plot->graph(0)->setData(x, y);
-            plot->rescaleAxes();
-            plot->replot();
-        }
-    };
-
-    // --- Plot ADXL ---
-    plotGraph(ui->customPlot_adxl_x_live, sampleIndex, xAdxl);
-    plotGraph(ui->customPlot_adxl_y_live, sampleIndex, yAdxl);
-    plotGraph(ui->customPlot_adxl_z_live, sampleIndex, zAdxl);
-
-    // --- FFT Plot ---
-    double Fs = adxlFreq;
-
-    qDebug() << "Debug 1";
-
-    try {
-        computeAndPlotFFT(xAdxl, Fs, ui->customPlot_adxl_x_FFT);
-    }
-    catch (std::exception &ex) {
-        qCritical() << "computeAndPlotFFT exception:" << ex.what();
-    }
-    catch (...) {
-        qCritical() << "computeAndPlotFFT unknown crash";
-    }
-
-    qDebug() << "Debug 2";
-
-
-    computeAndPlotFFT(yAdxl, Fs, ui->customPlot_adxl_y_FFT);
-    computeAndPlotFFT(zAdxl, Fs, ui->customPlot_adxl_z_FFT);
-
 }
 void MainWindow::makePacket4100InclLive(const QByteArray &rawPacket4100Incl)
 {
-    QVector<double> sampleIndex;
-    QVector<double> inclX, inclY;
-    int globalSample = 1;
     QByteArray packet = rawPacket4100Incl;
+    QVector<double> inclXL, inclYL;
+    QVector<double> sampleIndex;
+    int index=0;
 
     if (packet.size() < 20)
     {
-        qDebug() << "Skipping too short Inclinometer packet:" << packet.size();
-       return;
+        qDebug() << "Skipping too short inclinometer packet:" << packet.size();
+        return;
     }
 
     // Remove header (3 bytes)
@@ -2535,44 +2584,283 @@ void MainWindow::makePacket4100InclLive(const QByteArray &rawPacket4100Incl)
     if (usableSize < 4)
     {
         qDebug() << "Packet too short after trimming:" << usableSize;
-       return;
+        return;
     }
 
-        // Process each 4-byte sample (Xg, Yg)
-        for (int i = 0; i + 3 < usableSize; i += 4)
-        {
-            qint16 xRaw = (static_cast<quint8>(trimmed[i + 1])     << 8) | static_cast<quint8>(trimmed[i]);
-            qint16 yRaw = (static_cast<quint8>(trimmed[i + 3]) << 8) | static_cast<quint8>(trimmed[i + 2]);
 
-            // Convert to g-values
-            double xg = (xRaw * 0.031) / 1000.0;
-            double yg = (yRaw * 0.031) / 1000.0;
 
-            // Clamp to [-1, 1]
-            xg = std::max(-1.0, std::min(1.0, xg));
-            yg = std::max(-1.0, std::min(1.0, yg));
-
-            // Convert to degrees
-            double xDeg = std::asin(xg) * (180.0 / M_PI);
-            double yDeg = std::asin(yg) * (180.0 / M_PI);
-
-            sampleIndex.append(globalSample++);
-            inclX.append(xDeg);
-            inclY.append(yDeg);
-        }
-    qDebug() << "Total Incl samples:" << sampleIndex.size();
-
-    // --- Plotting ---
-    auto plotGraph = [](QCustomPlot *plot, const QVector<double> &x, const QVector<double> &y)
+    // Process each 4-byte sample (Xg, Yg)
+    for (int i = 0; i + 3 < usableSize; i += 4)
     {
-        if (plot->graphCount() > 0)
-        {
-            plot->graph(0)->setData(x, y);
-            plot->rescaleAxes();
-            plot->replot();
-        }
-    };
+        qint16 xRaw = (static_cast<quint8>(trimmed[i + 1])     << 8) | static_cast<quint8>(trimmed[i]);
+        qint16 yRaw = (static_cast<quint8>(trimmed[i + 3]) << 8) | static_cast<quint8>(trimmed[i + 2]);
 
-    plotGraph(ui->customPlot_incl_x_live, sampleIndex, inclX);
-    plotGraph(ui->customPlot_incl_y_live, sampleIndex, inclY);
+        // Convert to g-values
+        double xg = (xRaw * 0.031) / 1000.0;
+        double yg = (yRaw * 0.031) / 1000.0;
+
+
+        // Clamp to [-1, 1]
+        xg = std::max(-1.0, std::min(1.0, xg));
+        yg = std::max(-1.0, std::min(1.0, yg));
+
+        // Convert to degrees
+        double xDeg = std::asin(xg) * (180.0 / M_PI);
+        double yDeg = std::asin(yg) * (180.0 / M_PI);
+
+        sampleIndex.append(index++);
+        inclXL.append(xDeg);
+        inclYL.append(yDeg);
+
+
+        fullInclXL+=inclXL;
+        fullInclYL+=inclYL;
+
+        if(inclWindow<0)
+        {
+         inclWindow=sampleIndex.size();
+        }
+    }
+
+    livePlot(ui->customPlot_incl_x_live, sampleIndex, inclXL,inclWindow);
+    livePlot(ui->customPlot_incl_y_live, sampleIndex, inclYL,inclWindow);
+}
+void MainWindow::onUiUpdateTimer()
+{
+    if (!livePlotEnabled) return; // respect live toggle; skip plotting
+
+    // Grab pending data atomically
+    QVector<double> sIdx, x, y, z;
+    {
+        QMutexLocker locker(&dataMutex);
+        if (pending_sampleIndex.isEmpty()) return;
+        sIdx = pending_sampleIndex; pending_sampleIndex.clear();
+        x = pending_xAdxl;
+        full_xAdxl+=pending_xAdxl;
+        pending_xAdxl.clear();
+        y = pending_yAdxl;
+        full_yAdxl+=pending_yAdxl;
+        pending_yAdxl.clear();
+        z = pending_zAdxl;
+        full_zAdxl+=pending_zAdxl;
+        pending_zAdxl.clear();
+
+    }
+
+    // Now update plots on GUI thread (one batch per timer tick)
+    if (!ui->checkBox_fft->isChecked())
+    {
+        // time-domain
+        livePlot(ui->customPlot_adxl_x_live, sIdx, x,adxlWindow);
+        livePlot(ui->customPlot_adxl_y_live, sIdx, y,adxlWindow);
+        livePlot(ui->customPlot_adxl_z_live, sIdx, z,adxlWindow);
+    }
+    else
+    {
+        plotLiveFFT(x, adxlFreqL, ui->customPlot_adxl_x_live);
+        plotLiveFFT(y, adxlFreqL, ui->customPlot_adxl_y_live);
+        plotLiveFFT(z, adxlFreqL, ui->customPlot_adxl_z_live);
+    }
+}
+void MainWindow::livePlot(QCustomPlot *plot,
+                          const QVector<double> &xValues,
+                          const QVector<double> &yValues,int Window)
+{
+    if (!plot) return;
+    if (xValues.isEmpty() || yValues.isEmpty()) return;
+    if (xValues.size() != yValues.size()) return;
+
+    if (plot->graphCount() == 0)
+        plot->addGraph();
+     plot->graph(0)->data()->clear();
+
+    plot->graph(0)->addData(xValues, yValues);
+    if(Window>0)
+        plot->xAxis->setRange(0, Window);
+    plot->graph(0)->rescaleValueAxis(true);
+     plot->graph(0)->setData(xValues,yValues);
+    plot->replot();
+}
+void MainWindow::plotLiveFFT(const QVector<double>& signal,
+                             double Fs,
+                             QCustomPlot *plot)
+{
+    if (signal.isEmpty() || plot == nullptr)
+        return;
+
+    QVector<double> processed = signal;
+
+    applyHanning(processed);
+
+    QVector<double> magnitude, freqAxis;
+    performFFT(processed, magnitude, freqAxis, Fs);
+    plot->graph(0)->setData(freqAxis, magnitude);
+    plot->xAxis->setRange(0, Fs/2);
+    plot->graph(0)->rescaleValueAxis();
+    plot->replot();
+}
+
+
+void MainWindow::on_checkBox_fft_stateChanged(int)
+{
+    // Temporarily disable live plotting to avoid races while switching labels
+    bool prevLive = livePlotEnabled;
+    livePlotEnabled = false;
+
+    if (ui->checkBox_fft->isChecked())
+    {
+        setupPlot(ui->customPlot_adxl_x_live, "ADXL X Frequency (Hz)", "Amplitude (g)", true);
+        setupPlot(ui->customPlot_adxl_y_live, "ADXL Y Frequency (Hz)", "Amplitude (g)", true);
+        setupPlot(ui->customPlot_adxl_z_live, "ADXL Z Frequency (Hz)", "Amplitude (g)", true);
+    }
+    else
+    {
+        setupPlot(ui->customPlot_adxl_x_live, "ADXL X", "Voltage (g)", true);
+        setupPlot(ui->customPlot_adxl_y_live, "ADXL Y", "Voltage (g)", true);
+        setupPlot(ui->customPlot_adxl_z_live, "ADXL Z", "Voltage (g)", true);
+    }
+
+    // restore live plotting only if it was on and the checkbox for live plot is checked
+    livePlotEnabled = prevLive && ui->checkBox_livePlot->isChecked();
+}
+
+
+void MainWindow::on_checkBox_livePlot_stateChanged(int arg1)
+{
+    Q_UNUSED(arg1);
+    if (!ui->checkBox_livePlot->isChecked()) {
+        QByteArray livePlotUnCheck=QByteArray::fromHex("53 54 57");
+        serialObj->writeData(livePlotUnCheck);
+        }
+    else
+    {
+        QByteArray livePlotCheck=QByteArray::fromHex("53 54 56");
+         serialObj->writeData(livePlotCheck);    
+    }
+
+}
+
+void MainWindow::on_pushButton_stopLivePlot_clicked()
+{
+    responseTimer->start(2000);
+
+    QByteArray stopPlot = QByteArray::fromHex("535458");
+
+    emit sendMsgId(0x11);
+    serialObj->writeData(stopPlot);
+
+
+}
+
+void MainWindow::saveLiveData(const QVector<double> &xAdxl,
+                                              const QVector<double> &yAdxl,
+                                              const QVector<double> &zAdxl,
+                                              const QVector<double> &inclX,
+                                              const QVector<double> &inclY)
+    {
+        QXlsx::Document xlsx;
+
+        // ---------- HEADER FORMAT ----------
+        QXlsx::Format headerFormat;
+        headerFormat.setFontBold(true);
+        headerFormat.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
+        headerFormat.setBorderStyle(QXlsx::Format::BorderThin);
+        QXlsx::Format headerFormat1;
+        headerFormat1.setFontBold(true);
+        headerFormat1.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
+        headerFormat1.setBorderStyle(QXlsx::Format::BorderThin);
+        headerFormat1.setFontSize(16);
+
+        // ---------- DATA FORMAT ----------
+        QXlsx::Format dataFormat;
+        dataFormat.setBorderStyle(QXlsx::Format::BorderThin);
+
+        // ---------------- HEADERS ----------------
+        xlsx.mergeCells("A1:B1");
+        xlsx.write("A1","Raw  Sensor Data",headerFormat1);
+        xlsx.write("A2","ADXL freq",headerFormat);
+        xlsx.write("B2",adxlFreqL);
+        xlsx.write("D2","Inclinometer freq",headerFormat);
+        xlsx.write("E2",inclFreqL);
+
+        xlsx.write("A4", "Samples", headerFormat);
+        xlsx.write("B4", "ADXL X (g)",   headerFormat);
+        xlsx.write("C4", "ADXL Y (g)",   headerFormat);
+        xlsx.write("D4", "ADXL Z (g)",   headerFormat);
+
+        xlsx.write("F4", "Incl Index",   headerFormat);
+        xlsx.write("G4", "Incl X (deg)", headerFormat);
+        xlsx.write("H4", "Incl Y (deg)", headerFormat);
+
+        // ---------- COLUMN WIDTHS ----------
+        xlsx.setColumnWidth(1, 1, 12);   // Index
+        xlsx.setColumnWidth(2, 4, 16);   // ADXL X,Y,Z
+        xlsx.setColumnWidth(6, 7, 16);   // Temperature
+        xlsx.setColumnWidth(9, 11, 16);  // Inclinometer
+
+        int row = 5;
+
+        // ------------ ADXL Values --------------
+        for (int i = 0; i < xAdxl.size(); i++)
+        {
+            xlsx.write(row, 1, i, dataFormat);
+            xlsx.write(row, 2, xAdxl[i],     dataFormat);
+            xlsx.write(row, 3, yAdxl[i],     dataFormat);
+            xlsx.write(row, 4, zAdxl[i],     dataFormat);
+            row++;
+        }
+
+
+        // ------------ Inclinometer Values --------------
+        int iRow = 5;
+        for (int i = 0; i < inclX.size(); i++)
+        {
+            xlsx.write(iRow, 6, i, dataFormat);
+            xlsx.write(iRow, 7, inclX[i],     dataFormat);
+            xlsx.write(iRow, 8, inclY[i],     dataFormat);
+            iRow++;
+        }
+
+        // ---------------- SIMPLE FILE DIALOG ----------------
+        QString defaultName = QString("SensorLiveData_%1.xlsx")
+                .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+
+        QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+
+        QString fullPath = QFileDialog::getSaveFileName(
+                    this,
+                    "Save Live Data",
+                    desktopPath + "/" + defaultName,
+                    "Excel Files (*.xlsx)"
+        );
+
+        if (fullPath.isEmpty()) {
+            QMessageBox::information(this, "Save Cancelled",
+                                     "User cancelled the file save operation.");
+            return;
+        }
+
+        if (!fullPath.endsWith(".xlsx", Qt::CaseInsensitive))
+            fullPath += ".xlsx";
+
+        // ---------------- SAVE ----------------
+        if (xlsx.saveAs(fullPath)) {
+            QMessageBox::information(this, "Success",
+                                     "Sensor data saved successfully at:\n" + fullPath);
+        } else {
+            QMessageBox::critical(this, "Save Failed",
+                                  "Failed to save Excel file.\nCheck permissions or try another location.");
+        }
+    }
+
+void MainWindow::on_pushButton_saveLive_clicked()
+{
+    (!full_xAdxl.isEmpty()&&
+     !full_yAdxl.isEmpty()&&
+     !full_zAdxl.isEmpty()&&
+     !fullInclXL.isEmpty()&&
+     !fullInclYL.isEmpty())?
+      saveLiveData(full_xAdxl,full_yAdxl,full_zAdxl,
+                   fullInclXL,fullInclYL):
+               (void)QMessageBox::warning(this,"No Data","Vectors are empty");
 }
