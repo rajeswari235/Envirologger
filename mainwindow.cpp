@@ -519,11 +519,23 @@ void MainWindow::initializeAllPlots()
     ui->customPlot_inclinometer_x->addGraph(); ui->customPlot_inclinometer_x->graph(0)->setPen(QPen(inclinometerColors[0], 1));
     ui->customPlot_inclinometer_y->addGraph(); ui->customPlot_inclinometer_y->graph(0)->setPen(QPen(inclinometerColors[1], 1));
 
-    setupPlot(ui->customPlot_incl_x_live,QString("Inclinometer X"),"Degrees(°)");
-    setupPlot(ui->customPlot_incl_y_live,QString("Inclinometer Y"),"Degrees(°)");
+    setupPlot(ui->customPlot_incl_x_live,QString("Inclinometer"),"Degrees(°)");
 
-    ui->customPlot_incl_x_live->addGraph(); ui->customPlot_incl_x_live->graph(0)->setPen(QPen(inclinometerColors[0], 1));
-    ui->customPlot_incl_y_live->addGraph(); ui->customPlot_incl_y_live->graph(0)->setPen(QPen(inclinometerColors[1], 1));
+    ui->customPlot_incl_x_live->addGraph();
+    ui->customPlot_incl_x_live->graph(0)->setPen(QPen(inclinometerColors[0], 1));
+    ui->customPlot_incl_x_live->graph(0)->setName("Inclinometer X");
+
+    ui->customPlot_incl_x_live->addGraph();
+    ui->customPlot_incl_x_live->graph(1)->setPen(QPen(inclinometerColors[1], 1));
+    ui->customPlot_incl_x_live->graph(1)->setName("Inclinometer Y");
+
+    ui->customPlot_incl_x_live->legend->setVisible(true);
+    ui->customPlot_incl_x_live->legend->setIconSize(8, 8);
+
+    QFont legendFont = ui->customPlot_incl_x_live->legend->font();
+    legendFont.setPointSize(8);
+    ui->customPlot_incl_x_live->legend->setFont(legendFont);
+
 
 
     //  Temperature — Celsius vs samples
@@ -1711,7 +1723,8 @@ void MainWindow::on_pushButton_startLog_clicked()
         QMessageBox::warning(this,"Failed","Please set the log time");
         return;
     }
-    // Start the timeout timer
+    maxPeak =-1;
+
     responseTimer->start(2000); // 2 Sec timer
 
     QByteArray command;
@@ -2378,15 +2391,12 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
     else if(data.startsWith(QByteArray::fromHex("CC DD FF"))&&data.endsWith(QByteArray::fromHex("EE FF")))
     {
         QByteArray data=byteArrayData;
-         writeToNotes("Adxl packet received size:"+QString::number(data.size()));
         if (4160 <= data.size())
         {
             QByteArray packet4100 = data;
             if (packet4100.endsWith(QByteArray::fromHex("EE FF")))
             {
                 packet4100.remove(packet4100.size()-62,60);
-
-                writeToNotes("Adxl packet size after removing dummy:"+QString::number(packet4100.size()));
                 if(packet4100.contains(QByteArray::fromHex("FF FF FF FF FF FF")))
                 {
                     // Special condition FF's checking
@@ -2420,7 +2430,7 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
                 // Extract last 2 bytes before footer as temperature
                 QByteArray tempBytes = packet4100Adxl.mid(packet4100Adxl.size() - 5, 2);
                 temperaturePacket.append(tempBytes);
-                writeToNotes("temperaturaPacket"+temperaturePacket.toHex(' ').toUpper());
+
                 quint8 templsb=static_cast<quint8>(temperaturePacket[0]);
                 quint8 tempmsb=static_cast<quint8>(temperaturePacket[1]);
                 quint16 temp=templsb<<8|tempmsb;
@@ -2481,6 +2491,13 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
                 }
                 makePacket4100InclLive(packet4100Incl);
             }
+    else if(data==QByteArray::fromHex("53 54 50"))
+    {
+        qDebug()<<"stop command Received";
+    }
+    else{
+        qDebug()<<"unknown data Received";
+    }
 }
 void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
 {
@@ -2622,8 +2639,8 @@ void MainWindow::makePacket4100InclLive(const QByteArray &rawPacket4100Incl)
         }
     }
 
-    livePlot(ui->customPlot_incl_x_live, sampleIndex, inclXL,inclWindow);
-    livePlot(ui->customPlot_incl_y_live, sampleIndex, inclYL,inclWindow);
+    livePlot(ui->customPlot_incl_x_live, sampleIndex, inclXL,inclWindow,0);
+    livePlot(ui->customPlot_incl_x_live, sampleIndex, inclYL,inclWindow,1);
 }
 void MainWindow::onUiUpdateTimer()
 {
@@ -2651,9 +2668,9 @@ void MainWindow::onUiUpdateTimer()
     if (!ui->checkBox_fft->isChecked())
     {
         // time-domain
-        livePlot(ui->customPlot_adxl_x_live, sIdx, x,adxlWindow);
-        livePlot(ui->customPlot_adxl_y_live, sIdx, y,adxlWindow);
-        livePlot(ui->customPlot_adxl_z_live, sIdx, z,adxlWindow);
+        livePlot(ui->customPlot_adxl_x_live, sIdx, x,adxlWindow,0);
+        livePlot(ui->customPlot_adxl_y_live, sIdx, y,adxlWindow,0);
+        livePlot(ui->customPlot_adxl_z_live, sIdx, z,adxlWindow,0);
     }
     else
     {
@@ -2664,23 +2681,28 @@ void MainWindow::onUiUpdateTimer()
 }
 void MainWindow::livePlot(QCustomPlot *plot,
                           const QVector<double> &xValues,
-                          const QVector<double> &yValues,int Window)
+                          const QVector<double> &yValues,
+                          int Window,
+                          int graphIndex)
 {
     if (!plot) return;
     if (xValues.isEmpty() || yValues.isEmpty()) return;
     if (xValues.size() != yValues.size()) return;
 
-    if (plot->graphCount() == 0)
+    // If graphIndex is out of range → create graph
+    if (graphIndex >= plot->graphCount())
         plot->addGraph();
-     plot->graph(0)->data()->clear();
 
-    plot->graph(0)->addData(xValues, yValues);
-    if(Window>0)
-        plot->xAxis->setRange(0, Window);
-    plot->graph(0)->rescaleValueAxis(true);
-     plot->graph(0)->setData(xValues,yValues);
+    plot->graph(graphIndex)->data()->clear();
+    plot->graph(graphIndex)->addData(xValues, yValues);
+
+    if (Window > 0)
+        plot->xAxis->setRange(xValues.last() - Window, xValues.last());
+
+    plot->graph(graphIndex)->rescaleValueAxis(true);
     plot->replot();
 }
+
 void MainWindow::plotLiveFFT(const QVector<double>& signal,
                              double Fs,
                              QCustomPlot *plot)
@@ -2693,7 +2715,20 @@ void MainWindow::plotLiveFFT(const QVector<double>& signal,
     applyHanning(processed);
 
     QVector<double> magnitude, freqAxis;
+
     performFFT(processed, magnitude, freqAxis, Fs);
+
+       for (int i = 0; i < magnitude.size(); i++)
+        {
+            if (magnitude[i] > maxPeak)
+            {
+                maxPeak = magnitude[i];
+                peakFreq = freqAxis[i];
+            }
+        }
+        ui->lineEdit_fftPeak->setText(QString::number(maxPeak));
+        qDebug() << "Max FFT Peak:" << maxPeak << "at Frequency:" << peakFreq << "Hz";
+
     plot->graph(0)->setData(freqAxis, magnitude);
     plot->xAxis->setRange(0, Fs/2);
     plot->graph(0)->rescaleValueAxis();
@@ -2731,6 +2766,7 @@ void MainWindow::on_checkBox_livePlot_stateChanged(int arg1)
     if (!ui->checkBox_livePlot->isChecked()) {
         QByteArray livePlotUnCheck=QByteArray::fromHex("53 54 57");
         serialObj->writeData(livePlotUnCheck);
+
         }
     else
     {
@@ -2746,6 +2782,7 @@ void MainWindow::on_pushButton_stopLivePlot_clicked()
 
     QByteArray stopPlot = QByteArray::fromHex("535458");
 
+    writeToNotes("stop command send:"+stopPlot.toHex(' ').toUpper());
     emit sendMsgId(0x11);
     serialObj->writeData(stopPlot);
 

@@ -170,7 +170,7 @@ private slots:
         void livePlot(QCustomPlot *plot,
                       const QVector<double> &xValues,
                       const QVector<double> &yValues,
-                      int Window);
+                      int Window,int graphIndex);
 
         //fft functions
 
@@ -273,13 +273,16 @@ private:
 
      // flags and tuning
      bool livePlotEnabled;   // controlled by your livePlot checkbox
-     int uiUpdateIntervalMs = 33;   // ~30 Hz; tune this if needed
+     int uiUpdateIntervalMs = 33;
 
      quint16 adxlFreqL;
      quint16 inclFreqL;
 
      int adxlWindow = -1;
      int inclWindow = -1;
+     double maxPeak = -1;
+     double peakFreq = 0;
+
 
 
 

@@ -141,40 +141,6 @@ void serialPortHandler::readData()
     //powerId to avoid that warning QByteRef calling out of bond error
     quint8 powerId = 0x00;
 
-    if(buffer == QByteArray::fromHex("54 53 41 43 4B"))
-    {
-        powerId = 0x02;
-        ResponseData = buffer;
-        buffer.clear();
-        executeWriteToNotes("Start Log Initial cmd received bytes: "+ResponseData.toHex(' ').toUpper());
-    }
-    else if(buffer.startsWith(QByteArray::fromHex("AA BB")) && buffer.endsWith(QByteArray::fromHex("FF FF")))
-    {
-        powerId=0x0B;
-        ResponseData=buffer;
-        buffer.clear();
-        executeWriteToNotes("Frequency bytes for live data received bytes: "+ResponseData.toHex(' ').toUpper());
-    }
-    else if(buffer.startsWith(QByteArray::fromHex("CC DD FF")) && buffer.endsWith(QByteArray::fromHex("EE FF")))
-    {
-        powerId=0x0B;
-        ResponseData=buffer;
-        buffer.clear();
-        qDebug()<<"live plot data received";
-        executeWriteToNotes("Live plot ADXL received bytes: "+ResponseData.toHex(' ').toUpper());
-    }
-    else if(buffer.startsWith(QByteArray::fromHex("EE FF FF")) && buffer.endsWith(QByteArray::fromHex("CC DD")))
-    {
-        powerId=0x0B;
-        ResponseData=buffer;
-        buffer.clear();
-        qDebug()<<"live plot incl  data received";
-        executeWriteToNotes("Live plot Inclinometer received bytes: "+ResponseData.toHex(' ').toUpper());
-    }
-    else
-    {
-       executeWriteToNotes("Invalid data:"+QString::number(buffer.size()));
-    }
 
     qDebug()<<buffer.toHex()<<" data Received";
     if(msgId == 0x01)
@@ -231,22 +197,6 @@ void serialPortHandler::readData()
             buffer.clear();
             executeWriteToNotes("Frequency bytes for live data received bytes: "+ResponseData.toHex(' ').toUpper());
         }
-        else if(buffer.startsWith(QByteArray::fromHex("CC DD FF")) && buffer.endsWith(QByteArray::fromHex("EE FF")))
-        {
-            powerId=0x0B;
-            ResponseData=buffer;
-            buffer.clear();
-            qDebug()<<"live plot data received";
-            executeWriteToNotes("Live plot ADXL received bytes: "+ResponseData.toHex(' ').toUpper());
-        }
-        else if(buffer.startsWith(QByteArray::fromHex("EE FF FF")) && buffer.endsWith(QByteArray::fromHex("CC DD")))
-        {
-            powerId=0x0B;
-            ResponseData=buffer;
-            buffer.clear();
-            qDebug()<<"live plot incl  data received";
-            executeWriteToNotes("Live plot Inclinometer received bytes: "+ResponseData.toHex(' ').toUpper());
-        }
         else if(buffer == QByteArray::fromHex("54 53 50"))
         {
             powerId = 0x02;
@@ -256,11 +206,55 @@ void serialPortHandler::readData()
         }       
         else
         {
-            executeWriteToNotes(" Received bytes: "+QString::number(buffer.size()));
+            const QByteArray ADXL_HEADER = QByteArray::fromHex("CC DD FF");
+            const QByteArray ADXL_FOOTER = QByteArray::fromHex("EE FF");
+
+            const QByteArray INCL_HEADER = QByteArray::fromHex("EE FF FF");
+            const QByteArray INCL_FOOTER = QByteArray::fromHex("CC DD");
 
 
-        }
-    }
+
+                    if (buffer.startsWith(ADXL_HEADER))
+                    {
+                       powerId=0x0B;
+
+                        int footerPos = buffer.indexOf(ADXL_FOOTER, ADXL_HEADER.size());
+
+                        if (footerPos == -1)
+                            return;
+
+                        int packetSize = footerPos + ADXL_FOOTER.size();
+                        ResponseData = buffer.left(packetSize);
+                        executeWriteToNotes("Received ADXL Size:"+QString::number(ResponseData.size()));
+                        executeWriteToNotes("Received ADXL packet:"+ResponseData.toHex(' ').toUpper());
+                        adxlPackets+=1;
+                        buffer.remove(0,packetSize);
+                    }
+
+                    else if (buffer.startsWith(INCL_HEADER))
+                    {
+                        powerId=0x0B;
+                        int footerPos = buffer.indexOf(INCL_FOOTER, INCL_HEADER.size());
+
+                        // FOOTER NOT FOUND → wait for complete packet
+                        if (footerPos == -1)
+                            return;
+
+                        int packetSize = footerPos + INCL_FOOTER.size();
+                        ResponseData= buffer.left(packetSize);
+                        executeWriteToNotes("Received Inclinometer Size:"+QString::number(ResponseData.size()));
+                        executeWriteToNotes("Received Inclinometer packet:"+ResponseData.toHex(' ').toUpper());
+                        buffer.remove(0,packetSize);
+                        inclPackets+=1;
+
+
+                    }
+                    else{
+                        executeWriteToNotes("Data with invalid Header:"+buffer.toHex().toUpper());
+                    }
+                }
+            }
+
     else if(msgId == 0x03)
     {
         qDebug() << "msgId:" <<hex<<msgId;
@@ -393,20 +387,101 @@ void serialPortHandler::readData()
     }
     else if(msgId==0x11){
          qDebug()<<"msg Id:"<<hex<<msgId;
-         if(buffer==QByteArray::fromHex("53 54 50"))
+         //executeWriteToNotes("LivePlot stop Response Received bytes:"+buffer.toHex(' ').toUpper());
+         if(buffer.endsWith(QByteArray::fromHex("54 53 50")))
          {
              powerId=0x11;
              ResponseData=buffer;
              buffer.clear();
              executeWriteToNotes("LivePlot stop Response Received bytes:"+ResponseData.toHex(' ').toUpper());
+             executeWriteToNotes("Total AdxlPackets:"+QString::number(adxlPackets));
+             executeWriteToNotes("Total InclPackets:"+QString::number(inclPackets));
          }
 
     }
     else
     {
-        //do nothing
-        qDebug()<<"do nothing not a specified size/unknown msgId";
-        executeWriteToNotes("Fatal Error 404");
+        if(buffer == QByteArray::fromHex("54 53 41 43 4B"))
+        {
+            powerId = 0x02;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Start Log Initial cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer.startsWith(QByteArray::fromHex("AA BB")) && buffer.endsWith(QByteArray::fromHex("FF FF")))
+        {
+            powerId=0x0B;
+            ResponseData=buffer;
+            buffer.clear();
+            executeWriteToNotes("Frequency bytes for live data received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else if(buffer == QByteArray::fromHex("54 53 50"))
+        {
+            powerId = 0x02;
+            ResponseData = buffer;
+            buffer.clear();
+            executeWriteToNotes("Start Log End cmd received bytes: "+ResponseData.toHex(' ').toUpper());
+        }
+        else
+        {
+            while (true)
+                {
+                    int adxlStart = buffer.indexOf(QByteArray::fromHex("CC DD FF"));
+                    int inclStart = buffer.indexOf(QByteArray::fromHex("EE FF FF"));
+
+                    int startPos = -1;
+                    bool isAdxl = false;
+
+                    if (adxlStart != -1 && (inclStart == -1 || adxlStart < inclStart)) {
+                        startPos = adxlStart;
+                        isAdxl = true;
+                    }
+                    else if (inclStart != -1) {
+                        startPos = inclStart;
+                        isAdxl = false;
+                    }
+                    else {
+                        // No header found → wait
+                        return;
+                    }
+
+                    // Trim preceding garbage
+                    if (startPos > 0){
+                        buffer.remove(0, startPos);
+                        executeWriteToNotes("Invalid header:"+buffer.toHex(' ').toUpper());
+                      }
+                    // Now startPos = 0 always
+                    if (isAdxl)
+                    {
+                        powerId=0x0B;
+                        int footerPos = buffer.indexOf(QByteArray::fromHex("EE FF"), 3);
+                        if (footerPos == -1) return; // wait for more
+
+                        int packetSize = footerPos + 2; // include footer
+                       ResponseData = buffer.left(packetSize);
+                       executeWriteToNotes("Received Adxl packet size:"+QString::number(ResponseData.size()));
+                       executeWriteToNotes("Received Adxl packet :"+ResponseData.toHex(' ').toUpper());
+                       buffer.remove(0, packetSize);
+                       adxlPackets++;
+                       break;
+                    }
+                    else
+                    {
+                        powerId=0x0B;
+                        int footerPos = buffer.indexOf(QByteArray::fromHex("CC DD"), 3);
+                        if (footerPos == -1) return; // wait for more
+
+                        int packetSize = footerPos + 2;
+                        ResponseData = buffer.left(packetSize);
+                        executeWriteToNotes("Received Inclinometer packet size:"+QString::number(ResponseData.size()));
+                        executeWriteToNotes("Received Inclinometer packet :"+ResponseData.toHex(' ').toUpper());
+                        buffer.remove(0, packetSize);
+                        inclPackets++;
+                        break;
+                    }
+
+        }
+    }
 
     }
 
@@ -470,7 +545,7 @@ void serialPortHandler::readData()
      case 0x0B:
     {
         emit liveData(ResponseData);
-        qDebug()<<"data send to main window";
+
     }
         break;
     case 0x11:
@@ -492,4 +567,5 @@ void serialPortHandler::recvMsgId(quint8 id)
     qDebug() << "Received id:" <<hex<< id;
     this->id = id;
     buffer.clear();
+
 }

@@ -1,4 +1,4 @@
-#ifndef SERIALPORTHANDLER_H
+  #ifndef SERIALPORTHANDLER_H
 #define SERIALPORTHANDLER_H
 
 #include <QObject>
@@ -74,6 +74,8 @@ private:
     QByteArray  buffer;
 
     quint8 id;
+    int adxlPackets=0;
+    int inclPackets=0;
 
     //mutex variable
     QMutex bufferMutex; // Mutex for thread-safe access to the buffer

@@ -193,7 +193,7 @@
        <enum>QTabWidget::Triangular</enum>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>1</number>
       </property>
       <property name="elideMode">
        <enum>Qt::ElideNone</enum>
@@ -619,26 +619,6 @@
            <string/>
           </property>
           <layout class="QGridLayout" name="gridLayout_7">
-           <item row="0" column="0">
-            <widget class="QCustomPlot" name="customPlot_adxl_x_FFT" native="true">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QCustomPlot" name="customPlot_adxl_y_FFT" native="true">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-            </widget>
-           </item>
            <item row="2" column="0">
             <widget class="QCustomPlot" name="customPlot_adxl_z_FFT" native="true">
              <property name="sizePolicy">
@@ -695,6 +675,26 @@
                </widget>
               </item>
              </layout>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QCustomPlot" name="customPlot_adxl_y_FFT" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QCustomPlot" name="customPlot_adxl_x_FFT" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
             </widget>
            </item>
           </layout>
@@ -1272,9 +1272,9 @@
        <attribute name="title">
         <string>LivePlot</string>
        </attribute>
-       <layout class="QHBoxLayout" name="horizontalLayout_9">
+       <layout class="QVBoxLayout" name="verticalLayout_6">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_8" stretch="1,0">
+         <layout class="QHBoxLayout" name="horizontalLayout_7" stretch="1,0">
           <item>
            <widget class="QGroupBox" name="groupBox_5">
             <property name="sizePolicy">
@@ -1299,8 +1299,8 @@
             <property name="title">
              <string/>
             </property>
-            <layout class="QVBoxLayout" name="verticalLayout_6">
-             <item>
+            <layout class="QGridLayout" name="gridLayout_9">
+             <item row="0" column="0">
               <widget class="QCustomPlot" name="customPlot_adxl_x_live" native="true">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -1310,17 +1310,14 @@
                </property>
               </widget>
              </item>
-             <item>
+             <item row="0" column="1">
               <widget class="QCustomPlot" name="customPlot_adxl_y_live" native="true"/>
              </item>
-             <item>
+             <item row="1" column="0">
               <widget class="QCustomPlot" name="customPlot_adxl_z_live" native="true"/>
              </item>
-             <item>
+             <item row="1" column="1">
               <widget class="QCustomPlot" name="customPlot_incl_x_live" native="true"/>
-             </item>
-             <item>
-              <widget class="QCustomPlot" name="customPlot_incl_y_live" native="true"/>
              </item>
             </layout>
            </widget>
@@ -1344,6 +1341,49 @@
              <string/>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_5">
+             <item>
+              <spacer name="verticalSpacer_9">
+               <property name="orientation">
+                <enum>Qt::Vertical</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Minimum</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>15</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="checkBox_livePlot">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="contextMenuPolicy">
+                <enum>Qt::NoContextMenu</enum>
+               </property>
+               <property name="text">
+                <string>Live Plot</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="checkBox_fft">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>FFT</string>
+               </property>
+              </widget>
+             </item>
              <item>
               <widget class="QLineEdit" name="lineEdit_temperature">
                <property name="text">
@@ -1375,37 +1415,36 @@
                <property name="sizeHint" stdset="0">
                 <size>
                  <width>20</width>
-                 <height>35</height>
+                 <height>25</height>
                 </size>
                </property>
               </spacer>
              </item>
              <item>
-              <widget class="QCheckBox" name="checkBox_livePlot">
-               <property name="font">
-                <font>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="contextMenuPolicy">
-                <enum>Qt::NoContextMenu</enum>
-               </property>
+              <widget class="QLineEdit" name="lineEdit_fftPeak"/>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_7">
                <property name="text">
-                <string>Live Plot</string>
+                <string>      FFT Max Peak</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QCheckBox" name="checkBox_fft">
-               <property name="font">
-                <font>
-                 <pointsize>10</pointsize>
-                </font>
+              <spacer name="verticalSpacer_10">
+               <property name="orientation">
+                <enum>Qt::Vertical</enum>
                </property>
-               <property name="text">
-                <string>FFT</string>
+               <property name="sizeType">
+                <enum>QSizePolicy::Minimum</enum>
                </property>
-              </widget>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>15</height>
+                </size>
+               </property>
+              </spacer>
              </item>
              <item>
               <widget class="QPushButton" name="pushButton_stopLivePlot">
