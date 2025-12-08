@@ -30,7 +30,8 @@
 #include "kiss_fft.h"
 #include <QString>
 
-
+#include <windows.h>
+#include <psapi.h>
 
 
 QT_BEGIN_NAMESPACE
@@ -198,6 +199,9 @@ private slots:
        
        void on_pushButton_saveLive_clicked();
 
+       void on_pushButton_startLive_clicked();
+
+
 signals:
     void sendMsgId(quint8 id);
 
@@ -225,7 +229,9 @@ private:
      QDialog *dlg = nullptr;
 
      QDialog *dlgPlot = nullptr;
-      QDialog *eraseDlg=nullptr;
+     QDialog *eraseDlg=nullptr;
+
+      QDialog *live_save;
 
      // --- ADXL ---
      QVector<double> finalAdxlIndex;
@@ -280,8 +286,10 @@ private:
 
      int adxlWindow = -1;
      int inclWindow = -1;
-     double maxPeak = -1;
-     double peakFreq = 0;
+     double maxPeak_x = 0.0;
+     double maxPeak_y = 0.0;
+     double maxPeak_z = 0.0;
+
 
 
 

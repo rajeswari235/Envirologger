@@ -1372,7 +1372,6 @@ void MainWindow::showGuiData(const QByteArray &byteArrayData)
 //                QMessageBox::critical(this,"Failed","Failed To Log Data !");
 //            }
 //        });
-        qDebug()<<"2";
     }
 
     // Start Log End Initial Command msgId 0x02
@@ -1723,7 +1722,7 @@ void MainWindow::on_pushButton_startLog_clicked()
         QMessageBox::warning(this,"Failed","Please set the log time");
         return;
     }
-    maxPeak =-1;
+
 
     responseTimer->start(2000); // 2 Sec timer
 
@@ -2367,6 +2366,7 @@ void MainWindow::computeAndPlotFFT(const QVector<double>& signal,
 
 void MainWindow::dataProcessing(const QByteArray &byteArrayData)
 {
+    ui->tabWidget->tabBar()->setEnabled(false);
     QByteArray data=byteArrayData;
 
     int invalidHeaderCount=0;
@@ -2499,6 +2499,17 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
         qDebug()<<"unknown data Received";
     }
 }
+
+quint64 getCurrentProcessMemoryMB()
+{
+    PROCESS_MEMORY_COUNTERS_EX pmc;
+    GetProcessMemoryInfo(GetCurrentProcess(),
+                         (PROCESS_MEMORY_COUNTERS*)&pmc,
+                         sizeof(pmc));
+    // Convert bytes → MB
+    return pmc.WorkingSetSize / (1024 * 1024);
+}
+
 void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
 {
     QVector<double> sampleIndex;
@@ -2554,13 +2565,24 @@ void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
         qDebug() << "Fixed X-axis window set =" << adxlWindow;
     }
 
+    quint64 memMB = getCurrentProcessMemoryMB();
 
+        if (memMB > 4000)   // ⭐ set limit (300 MB is safe)
+        {
+            QMessageBox::warning(this,
+                                 "Memory Warning",
+                                 "Application memory usage is high.\n"
+                                 "Please SAVE data and restart the application.");
+
+            return;
+        }
 
         QMutexLocker locker(&dataMutex);
         pending_sampleIndex += sampleIndex;
         pending_xAdxl += xAdxl;
         pending_yAdxl += yAdxl;
         pending_zAdxl += zAdxl;
+        qDebug()<<"problem happened here";
 
         // optionally keep full history for later export
         full_xAdxl += xAdxl;
@@ -2707,8 +2729,27 @@ void MainWindow::plotLiveFFT(const QVector<double>& signal,
                              double Fs,
                              QCustomPlot *plot)
 {
+    double maxPeak=0.0;
     if (signal.isEmpty() || plot == nullptr)
         return;
+    if (plot == ui->customPlot_adxl_x_live)
+    {
+        maxPeak=maxPeak_x;
+    }
+    else if (plot == ui->customPlot_adxl_y_live)
+    {
+        maxPeak=maxPeak_y;
+
+    }
+    else if(plot==ui->customPlot_adxl_z_live)
+    {
+        maxPeak=maxPeak_z;
+
+    }
+    else
+         {
+             qDebug()<<"invalid Plot";
+         }
 
     QVector<double> processed = signal;
 
@@ -2723,13 +2764,35 @@ void MainWindow::plotLiveFFT(const QVector<double>& signal,
             if (magnitude[i] > maxPeak)
             {
                 maxPeak = magnitude[i];
-                peakFreq = freqAxis[i];
+
             }
         }
-        ui->lineEdit_fftPeak->setText(QString::number(maxPeak));
-        qDebug() << "Max FFT Peak:" << maxPeak << "at Frequency:" << peakFreq << "Hz";
+
+
 
     plot->graph(0)->setData(freqAxis, magnitude);
+
+    if (plot == ui->customPlot_adxl_x_live)
+    {
+         ui->lineEdit_fftPeak_x->setText(QString::number(maxPeak));
+         maxPeak_x=maxPeak;
+    }
+    else if (plot == ui->customPlot_adxl_y_live)
+    {
+         ui->lineEdit_fftPeak_y->setText(QString::number(maxPeak));
+         maxPeak_y=maxPeak;
+
+    }
+    else if(plot==ui->customPlot_adxl_z_live)
+    {
+        ui->lineEdit_fftPeak_z->setText(QString::number(maxPeak));
+        maxPeak_z=maxPeak;
+
+    }
+    else
+         {
+             qDebug()<<"invalid Plot";
+         }
     plot->xAxis->setRange(0, Fs/2);
     plot->graph(0)->rescaleValueAxis();
     plot->replot();
@@ -2766,6 +2829,7 @@ void MainWindow::on_checkBox_livePlot_stateChanged(int arg1)
     if (!ui->checkBox_livePlot->isChecked()) {
         QByteArray livePlotUnCheck=QByteArray::fromHex("53 54 57");
         serialObj->writeData(livePlotUnCheck);
+         ui->tabWidget->tabBar()->setEnabled(true);
 
         }
     else
@@ -2779,12 +2843,14 @@ void MainWindow::on_checkBox_livePlot_stateChanged(int arg1)
 void MainWindow::on_pushButton_stopLivePlot_clicked()
 {
     responseTimer->start(2000);
+    ui->tabWidget->tabBar()->setEnabled(true);
 
     QByteArray stopPlot = QByteArray::fromHex("535458");
 
     writeToNotes("stop command send:"+stopPlot.toHex(' ').toUpper());
     emit sendMsgId(0x11);
     serialObj->writeData(stopPlot);
+
 
 
 }
@@ -2795,6 +2861,7 @@ void MainWindow::saveLiveData(const QVector<double> &xAdxl,
                                               const QVector<double> &inclX,
                                               const QVector<double> &inclY)
     {
+
         QXlsx::Document xlsx;
 
         // ---------- HEADER FORMAT ----------
@@ -2876,7 +2943,6 @@ void MainWindow::saveLiveData(const QVector<double> &xAdxl,
                                      "User cancelled the file save operation.");
             return;
         }
-
         if (!fullPath.endsWith(".xlsx", Qt::CaseInsensitive))
             fullPath += ".xlsx";
 
@@ -2887,11 +2953,13 @@ void MainWindow::saveLiveData(const QVector<double> &xAdxl,
         } else {
             QMessageBox::critical(this, "Save Failed",
                                   "Failed to save Excel file.\nCheck permissions or try another location.");
-        }
+        }            
     }
 
 void MainWindow::on_pushButton_saveLive_clicked()
 {
+    live_save=createPleaseWaitDialog("Please Wait Data is Saving");
+
     (!full_xAdxl.isEmpty()&&
      !full_yAdxl.isEmpty()&&
      !full_zAdxl.isEmpty()&&
@@ -2900,4 +2968,33 @@ void MainWindow::on_pushButton_saveLive_clicked()
       saveLiveData(full_xAdxl,full_yAdxl,full_zAdxl,
                    fullInclXL,fullInclYL):
                (void)QMessageBox::warning(this,"No Data","Vectors are empty");
+
+    if(live_save)
+    {
+        live_save->close();
+        live_save=nullptr;
+    }
+
+}
+
+void MainWindow::on_pushButton_startLive_clicked()
+{
+     maxPeak_x = 0.0;
+     maxPeak_y = 0.0;
+     maxPeak_z = 0.0;
+
+    responseTimer->start(2000);
+
+    QByteArray command;
+
+    initializeSensorVectors();
+
+    command.append(0x53);
+    command.append(0x54);
+    command.append(0x42);
+
+    qDebug() << "Start Log cmd sent : " + hexBytes(command);
+    writeToNotes("Start Log cmd sent in livePlot: " + hexBytes(command));
+    emit sendMsgId(0x02);
+    serialObj->writeData(command);
 }
