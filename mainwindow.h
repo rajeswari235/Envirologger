@@ -202,6 +202,8 @@ private slots:
        void on_pushButton_startLive_clicked();
 
 
+       void on_pushButton_fitToScreenLive_clicked();
+
 signals:
     void sendMsgId(quint8 id);
 
@@ -212,6 +214,7 @@ private:
     QCustomPlot *fftPlot;
     QList<QCPItemTracer*> fftTracers;
     QList<QCPItemText*>   fftLabels;
+    QTimer *saveLimitTimer;
 
 
     //Log handling
@@ -231,7 +234,7 @@ private:
      QDialog *dlgPlot = nullptr;
      QDialog *eraseDlg=nullptr;
 
-      QDialog *live_save;
+      bool saveLive=false;
 
      // --- ADXL ---
      QVector<double> finalAdxlIndex;
@@ -279,7 +282,7 @@ private:
 
      // flags and tuning
      bool livePlotEnabled;   // controlled by your livePlot checkbox
-     int uiUpdateIntervalMs = 33;
+     int uiUpdateIntervalMs =50;
 
      quint16 adxlFreqL;
      quint16 inclFreqL;
@@ -291,8 +294,5 @@ private:
      double maxPeak_z = 0.0;
 
 
-
-
-
-};
+};  
 #endif // MAINWINDOW_H

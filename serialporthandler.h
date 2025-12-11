@@ -1,4 +1,4 @@
-  #ifndef SERIALPORTHANDLER_H
+#ifndef SERIALPORTHANDLER_H
 #define SERIALPORTHANDLER_H
 
 #include <QObject>

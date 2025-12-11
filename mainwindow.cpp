@@ -10,7 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    serialObj =   new serialPortHandler(this);
+    serialObj = new serialPortHandler(this);
 
     ui->dateTimeEdit->setDateTime(QDateTime(QDate(2025, 1, 1),
                                             QTime(0, 0, 0)));
@@ -30,9 +30,22 @@ MainWindow::MainWindow(QWidget *parent)
     connect(uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onUiUpdateTimer);
     uiUpdateTimer->start();
 
+
+    saveLimitTimer = new QTimer(this);
+    saveLimitTimer->setSingleShot(true);
+
+    connect(saveLimitTimer, &QTimer::timeout, this, [this]() {
+        saveLive = false;
+        QMessageBox::information(this, "Limitation reached",
+                                 "Data saving is stopped due to memory limitation");
+    });
+
+
+
+
     livePlotEnabled = ui->checkBox_livePlot->isChecked();
     connect(ui->checkBox_livePlot, &QCheckBox::stateChanged, this, [this](int) {
-        livePlotEnabled = ui->checkBox_livePlot->isChecked();
+    livePlotEnabled = ui->checkBox_livePlot->isChecked();
     });
 
     connect(ui->pushButton_clear,&QPushButton::clicked,ui->textEdit_rawBytes,&QTextEdit::clear);
@@ -526,7 +539,7 @@ void MainWindow::initializeAllPlots()
     ui->customPlot_incl_x_live->graph(0)->setName("Inclinometer X");
 
     ui->customPlot_incl_x_live->addGraph();
-    ui->customPlot_incl_x_live->graph(1)->setPen(QPen(inclinometerColors[1], 1));
+    ui->customPlot_incl_x_live->graph(1)->setPen(QPen(tempColor, 1));
     ui->customPlot_incl_x_live->graph(1)->setName("Inclinometer Y");
 
     ui->customPlot_incl_x_live->legend->setVisible(true);
@@ -2367,6 +2380,8 @@ void MainWindow::computeAndPlotFFT(const QVector<double>& signal,
 void MainWindow::dataProcessing(const QByteArray &byteArrayData)
 {
     ui->tabWidget->tabBar()->setEnabled(false);
+
+
     QByteArray data=byteArrayData;
 
     int invalidHeaderCount=0;
@@ -2381,10 +2396,50 @@ void MainWindow::dataProcessing(const QByteArray &byteArrayData)
         quint16 adxlFreqL=adxlOne<<8|adxlTwo;
         this->adxlFreqL=adxlFreqL;
 
+        QString displayAdxlfreq;
+        QString displayInclinometerfreq;
+
+        if(adxlFreqL < 101)
+        {
+            displayAdxlfreq=QString::number(1.0/adxlFreqL)+" s";
+        }
+        else if(adxlFreqL > 100 and adxlFreqL < 5001 )
+        {
+            displayAdxlfreq=QString::number((1.0/adxlFreqL)*1000)+" ms";
+        }
+        else if(adxlFreqL > 5000 and adxlFreqL < 20001)
+        {
+            displayAdxlfreq=QString::number((1.0/adxlFreqL)*1000000)+" µs";
+        }
+        else
+        {
+            qDebug()<<"Invalid Adxl frequency";
+        }
+
+
+        setupPlot(ui->customPlot_adxl_x_live,QString("ADXL X Time(1 = %1)").arg(displayAdxlfreq),"Acceleration(g)",1);
+        setupPlot(ui->customPlot_adxl_y_live,QString("ADXL Y Time(1 = %1)").arg(displayAdxlfreq),"Acceleration(g)",1);
+        setupPlot(ui->customPlot_adxl_z_live,QString("ADXL Z Time(1 = %1)").arg(displayAdxlfreq),"Acceleration(g)",1);
+
+
         quint8 inclOne=static_cast<quint8>(data[4]);
         quint8 inclTwo=static_cast<quint8>(data[5]);
         quint16 inclFreqL=inclOne<<8|inclTwo;
         this->inclFreqL=inclFreqL;
+
+        if(inclFreqL < 101)
+        {
+            displayInclinometerfreq=QString::number(1.0/inclFreqL)+" s";
+        }
+        else if(inclFreqL > 100 and inclFreqL < 1001 )
+        {
+            displayInclinometerfreq=QString::number((1.0/inclFreqL)*1000)+" ms";
+        }
+        else
+        {
+            qDebug()<<"Invalid inclinometer frequency";
+        }
+        setupPlot(ui->customPlot_incl_x_live,QString("Inclinometer X&Y Time(1 = %1)").arg(displayInclinometerfreq),"Degrees(°)",1);
 
     }
 
@@ -2506,7 +2561,6 @@ quint64 getCurrentProcessMemoryMB()
     GetProcessMemoryInfo(GetCurrentProcess(),
                          (PROCESS_MEMORY_COUNTERS*)&pmc,
                          sizeof(pmc));
-    // Convert bytes → MB
     return pmc.WorkingSetSize / (1024 * 1024);
 }
 
@@ -2566,16 +2620,20 @@ void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
     }
 
     quint64 memMB = getCurrentProcessMemoryMB();
+    qDebug()<<memMB<<"memory used";
 
-        if (memMB > 4000)   // ⭐ set limit (300 MB is safe)
-        {
-            QMessageBox::warning(this,
-                                 "Memory Warning",
-                                 "Application memory usage is high.\n"
-                                 "Please SAVE data and restart the application.");
+//        if (memMB > 4000)
+//        {
+//            QByteArray stopcmd=QByteArray::fromHex("535458");
+//            serialObj->writeData(stopcmd);
+//            QMessageBox::warning(this,
+//                                 "Memory Warning",
+//                                 "Application memory usage is high.\n"
+//                                 "Please SAVE data and restart the application.");
 
-            return;
-        }
+
+//            return;
+//        }
 
         QMutexLocker locker(&dataMutex);
         pending_sampleIndex += sampleIndex;
@@ -2585,10 +2643,11 @@ void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
         qDebug()<<"problem happened here";
 
         // optionally keep full history for later export
+        if(saveLive){
         full_xAdxl += xAdxl;
         full_yAdxl += yAdxl;
         full_zAdxl += zAdxl;
-
+         }
 
     qDebug() << "Total ADXL samples queued:" << pending_sampleIndex.size();
 
@@ -2652,14 +2711,16 @@ void MainWindow::makePacket4100InclLive(const QByteArray &rawPacket4100Incl)
         inclYL.append(yDeg);
 
 
-        fullInclXL+=inclXL;
-        fullInclYL+=inclYL;
-
         if(inclWindow<0)
         {
          inclWindow=sampleIndex.size();
         }
     }
+    if(saveLive)
+    {
+    fullInclXL+=inclXL;
+    fullInclYL+=inclYL;
+     }
 
     livePlot(ui->customPlot_incl_x_live, sampleIndex, inclXL,inclWindow,0);
     livePlot(ui->customPlot_incl_x_live, sampleIndex, inclYL,inclWindow,1);
@@ -2675,13 +2736,10 @@ void MainWindow::onUiUpdateTimer()
         if (pending_sampleIndex.isEmpty()) return;
         sIdx = pending_sampleIndex; pending_sampleIndex.clear();
         x = pending_xAdxl;
-        full_xAdxl+=pending_xAdxl;
         pending_xAdxl.clear();
         y = pending_yAdxl;
-        full_yAdxl+=pending_yAdxl;
         pending_yAdxl.clear();
         z = pending_zAdxl;
-        full_zAdxl+=pending_zAdxl;
         pending_zAdxl.clear();
 
     }
@@ -2829,13 +2887,16 @@ void MainWindow::on_checkBox_livePlot_stateChanged(int arg1)
     if (!ui->checkBox_livePlot->isChecked()) {
         QByteArray livePlotUnCheck=QByteArray::fromHex("53 54 57");
         serialObj->writeData(livePlotUnCheck);
+        writeToNotes("live checkbox unchecked");
          ui->tabWidget->tabBar()->setEnabled(true);
 
         }
     else
     {
         QByteArray livePlotCheck=QByteArray::fromHex("53 54 56");
-         serialObj->writeData(livePlotCheck);    
+         serialObj->writeData(livePlotCheck);
+         writeToNotes("live checkbox checked");
+         emit sendMsgId(0x12);
     }
 
 }
@@ -2851,132 +2912,162 @@ void MainWindow::on_pushButton_stopLivePlot_clicked()
     emit sendMsgId(0x11);
     serialObj->writeData(stopPlot);
 
+    if (saveLimitTimer->isActive()) {
+            saveLimitTimer->stop();
+            qDebug() << "Timer stopped.";
+        }
+
+     saveLive=false;
+
+
+     (!full_xAdxl.isEmpty()&&
+      !full_yAdxl.isEmpty()&&
+      !full_zAdxl.isEmpty()&&
+      !fullInclXL.isEmpty()&&
+      !fullInclYL.isEmpty())?
+       saveLiveData(full_xAdxl,full_yAdxl,full_zAdxl,
+                    fullInclXL,fullInclYL):
+                (void)QMessageBox::warning(this,"No Data","No data to save");
 
 
 }
 
 void MainWindow::saveLiveData(const QVector<double> &xAdxl,
-                                              const QVector<double> &yAdxl,
-                                              const QVector<double> &zAdxl,
-                                              const QVector<double> &inclX,
-                                              const QVector<double> &inclY)
-    {
+                              const QVector<double> &yAdxl,
+                              const QVector<double> &zAdxl,
+                              const QVector<double> &inclX,
+                              const QVector<double> &inclY)
+{
+    // ---------------- SIMPLE FILE DIALOG FIRST ----------------
+    QString defaultName = QString("SensorLiveData_%1.xlsx")
+            .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
 
-        QXlsx::Document xlsx;
+    QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
 
-        // ---------- HEADER FORMAT ----------
+    QString fullPath = QFileDialog::getSaveFileName(
+                this,
+                "Save Live Data",
+                desktopPath + "/" + defaultName,
+                "Excel Files (*.xlsx)"
+    );
+
+    if (fullPath.isEmpty()) {
+        QMessageBox::information(this, "Save Cancelled",
+                                 "User cancelled the file save operation.");
+        return;
+    }
+    if (!fullPath.endsWith(".xlsx", Qt::CaseInsensitive))
+        fullPath += ".xlsx";
+
+     qDebug()<<"dilaog created";
+    // 😊 NOW show your "Please Wait" dialog after choosing folder
+    QDialog* waitDlg = createPleaseWaitDialog("Data Saving... Please wait");
+
+   qDebug()<<"saving started";
+    // ---------------- CREATE XLSX ----------------
+    QXlsx::Document xlsx;
+
+    const int MAX_EXCEL_ROWS = 1048576;
+    int sheetNumber = 1;
+
+    auto setupSheetHeader = [&](QXlsx::Document &xlsx) {
+        qDebug()<<"sheet created";
         QXlsx::Format headerFormat;
         headerFormat.setFontBold(true);
         headerFormat.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
         headerFormat.setBorderStyle(QXlsx::Format::BorderThin);
+
         QXlsx::Format headerFormat1;
         headerFormat1.setFontBold(true);
         headerFormat1.setHorizontalAlignment(QXlsx::Format::AlignHCenter);
         headerFormat1.setBorderStyle(QXlsx::Format::BorderThin);
         headerFormat1.setFontSize(16);
 
-        // ---------- DATA FORMAT ----------
-        QXlsx::Format dataFormat;
-        dataFormat.setBorderStyle(QXlsx::Format::BorderThin);
-
-        // ---------------- HEADERS ----------------
         xlsx.mergeCells("A1:B1");
-        xlsx.write("A1","Raw  Sensor Data",headerFormat1);
-        xlsx.write("A2","ADXL freq",headerFormat);
-        xlsx.write("B2",adxlFreqL);
-        xlsx.write("D2","Inclinometer freq",headerFormat);
-        xlsx.write("E2",inclFreqL);
+        xlsx.write("A1", "Raw Sensor Data", headerFormat1);
+        xlsx.write("A2", "ADXL freq", headerFormat);
+        xlsx.write("B2", adxlFreqL);
+        xlsx.write("D2", "Inclinometer freq", headerFormat);
+        xlsx.write("E2", inclFreqL);
 
         xlsx.write("A4", "Samples", headerFormat);
-        xlsx.write("B4", "ADXL X (g)",   headerFormat);
-        xlsx.write("C4", "ADXL Y (g)",   headerFormat);
-        xlsx.write("D4", "ADXL Z (g)",   headerFormat);
+        xlsx.write("B4", "ADXL X (g)", headerFormat);
+        xlsx.write("C4", "ADXL Y (g)", headerFormat);
+        xlsx.write("D4", "ADXL Z (g)", headerFormat);
 
-        xlsx.write("F4", "Incl Index",   headerFormat);
+        xlsx.write("F4", "Incl Index", headerFormat);
         xlsx.write("G4", "Incl X (deg)", headerFormat);
         xlsx.write("H4", "Incl Y (deg)", headerFormat);
 
-        // ---------- COLUMN WIDTHS ----------
-        xlsx.setColumnWidth(1, 1, 12);   // Index
-        xlsx.setColumnWidth(2, 4, 16);   // ADXL X,Y,Z
-        xlsx.setColumnWidth(6, 7, 16);   // Temperature
-        xlsx.setColumnWidth(9, 11, 16);  // Inclinometer
+        xlsx.setColumnWidth(1, 1, 12);
+        xlsx.setColumnWidth(2, 4, 16);
+        xlsx.setColumnWidth(6, 8, 16);
+    };
 
-        int row = 5;
+    setupSheetHeader(xlsx);
 
-        // ------------ ADXL Values --------------
-        for (int i = 0; i < xAdxl.size(); i++)
+    QXlsx::Format dataFormat;
+    dataFormat.setBorderStyle(QXlsx::Format::BorderThin);
+
+    int row = 5;
+    int iRow = 5;
+
+    int maxCount = std::max(xAdxl.size(), inclX.size());
+
+    for (int i = 0; i < maxCount; i++)
+    {
+        if (row > MAX_EXCEL_ROWS - 5)
         {
+            sheetNumber++;
+            QString sheetName = QString("Sheet%1").arg(sheetNumber);
+            xlsx.addSheet(sheetName);
+            xlsx.selectSheet(sheetName);
+
+            setupSheetHeader(xlsx);
+
+            row = 5;
+            iRow = 5;
+        }
+
+        if (i < xAdxl.size()) {
             xlsx.write(row, 1, i, dataFormat);
-            xlsx.write(row, 2, xAdxl[i],     dataFormat);
-            xlsx.write(row, 3, yAdxl[i],     dataFormat);
-            xlsx.write(row, 4, zAdxl[i],     dataFormat);
+            xlsx.write(row, 2, xAdxl[i], dataFormat);
+            xlsx.write(row, 3, yAdxl[i], dataFormat);
+            xlsx.write(row, 4, zAdxl[i], dataFormat);
             row++;
         }
-
-
-        // ------------ Inclinometer Values --------------
-        int iRow = 5;
-        for (int i = 0; i < inclX.size(); i++)
-        {
+        if (i < inclX.size()) {
             xlsx.write(iRow, 6, i, dataFormat);
-            xlsx.write(iRow, 7, inclX[i],     dataFormat);
-            xlsx.write(iRow, 8, inclY[i],     dataFormat);
+            xlsx.write(iRow, 7, inclX[i], dataFormat);
+            xlsx.write(iRow, 8, inclY[i], dataFormat);
             iRow++;
         }
-
-        // ---------------- SIMPLE FILE DIALOG ----------------
-        QString defaultName = QString("SensorLiveData_%1.xlsx")
-                .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
-
-        QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-
-        QString fullPath = QFileDialog::getSaveFileName(
-                    this,
-                    "Save Live Data",
-                    desktopPath + "/" + defaultName,
-                    "Excel Files (*.xlsx)"
-        );
-
-        if (fullPath.isEmpty()) {
-            QMessageBox::information(this, "Save Cancelled",
-                                     "User cancelled the file save operation.");
-            return;
-        }
-        if (!fullPath.endsWith(".xlsx", Qt::CaseInsensitive))
-            fullPath += ".xlsx";
-
-        // ---------------- SAVE ----------------
-        if (xlsx.saveAs(fullPath)) {
-            QMessageBox::information(this, "Success",
-                                     "Sensor data saved successfully at:\n" + fullPath);
-        } else {
-            QMessageBox::critical(this, "Save Failed",
-                                  "Failed to save Excel file.\nCheck permissions or try another location.");
-        }            
     }
+
+    bool ok = xlsx.saveAs(fullPath);
+    if(waitDlg)
+    {
+    waitDlg->close();
+    waitDlg=nullptr;
+    }
+
+    if (ok)
+        QMessageBox::information(this, "Success", "Saved successfully:\n" + fullPath);
+    else
+        QMessageBox::critical(this, "Failed", "Unable to save Excel file.");
+}
+
 
 void MainWindow::on_pushButton_saveLive_clicked()
 {
-    live_save=createPleaseWaitDialog("Please Wait Data is Saving");
 
-    (!full_xAdxl.isEmpty()&&
-     !full_yAdxl.isEmpty()&&
-     !full_zAdxl.isEmpty()&&
-     !fullInclXL.isEmpty()&&
-     !fullInclYL.isEmpty())?
-      saveLiveData(full_xAdxl,full_yAdxl,full_zAdxl,
-                   fullInclXL,fullInclYL):
-               (void)QMessageBox::warning(this,"No Data","Vectors are empty");
-
-    if(live_save)
-    {
-        live_save->close();
-        live_save=nullptr;
-    }
+        saveLive = true;
+        if (saveLive)
+        {
+            saveLimitTimer->start(420000);
+        }
 
 }
-
 void MainWindow::on_pushButton_startLive_clicked()
 {
      maxPeak_x = 0.0;
@@ -2986,7 +3077,6 @@ void MainWindow::on_pushButton_startLive_clicked()
     responseTimer->start(2000);
 
     QByteArray command;
-
     initializeSensorVectors();
 
     command.append(0x53);
@@ -2998,3 +3088,50 @@ void MainWindow::on_pushButton_startLive_clicked()
     emit sendMsgId(0x02);
     serialObj->writeData(command);
 }
+
+void MainWindow::on_pushButton_fitToScreenLive_clicked()
+{
+        QList<QCustomPlot*> allPlots = {
+            ui->customPlot_adxl_x_live,
+            ui->customPlot_adxl_y_live,
+            ui->customPlot_adxl_z_live,
+            ui->customPlot_incl_x_live
+        };
+
+        // Iterate through each and fit accordingly
+        for (QCustomPlot *plot : allPlots)
+        {
+            if (!plot) continue;
+
+            bool hasData = false;
+            for (int i = 0; i < plot->graphCount(); ++i)
+            {
+                if (plot->graph(i)->dataCount() > 0)
+                {
+                    hasData = true;
+                    break;
+                }
+            }
+
+            if (hasData)
+            {
+                //  Auto-fit to existing data
+                plot->rescaleAxes(true);
+
+                // Small padding for aesthetics
+                plot->xAxis->scaleRange(1.05, plot->xAxis->range().center());
+                plot->yAxis->scaleRange(1.05, plot->yAxis->range().center());
+            }
+            else
+            {
+                //  No data — reset to initial default view
+                plot->xAxis->setRange(0, 100);
+                plot->yAxis->setRange(-5, 5);
+            }
+
+            plot->replot();
+        }
+
+        qDebug() << "All plots adjusted — data-fitted if available, otherwise reset to default view.";
+        writeToNotes("All plots adjusted — data-fitted if available, otherwise reset to default view.");
+    }
