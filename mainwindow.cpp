@@ -27,8 +27,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     uiUpdateTimer = new QTimer(this);
     uiUpdateTimer->setInterval(uiUpdateIntervalMs);
-    connect(uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onUiUpdateTimer);
-    uiUpdateTimer->start();
+//    connect(uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onUiUpdateTimer);
+//    uiUpdateTimer->start();
 
 
     saveLimitTimer = new QTimer(this);
@@ -208,6 +208,7 @@ void MainWindow::onPortSelected(const QString &portName)
 void MainWindow::handleTimeout()
 {
     QMessageBox::warning(this, "Timeout", "Hardware Not Responding!");
+
     if(dlgPlot){
         dlgPlot->close();
         dlgPlot=nullptr;
@@ -2209,8 +2210,9 @@ void MainWindow::on_pushButton_on_clicked()
 {
     responseTimer->start(2000);
     QByteArray packet=QByteArray::fromHex("535447");
+    emit sendMsgId(0x08);
     serialObj->writeData(packet);
-     emit sendMsgId(0x08);
+
 
 }
 
@@ -2218,8 +2220,9 @@ void MainWindow::on_pushButton_off_clicked()
 {
     responseTimer->start(2000);
     QByteArray packet=QByteArray::fromHex("535448");
-    serialObj->writeData(packet);
     emit sendMsgId(0x09);
+
+    serialObj->writeData(packet);
 
 }
 
@@ -2619,28 +2622,23 @@ void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
         qDebug() << "Fixed X-axis window set =" << adxlWindow;
     }
 
-    quint64 memMB = getCurrentProcessMemoryMB();
-    qDebug()<<memMB<<"memory used";
+//    quint64 memMB = getCurrentProcessMemoryMB();
+//    qDebug()<<memMB<<"memory used";
 
 //        if (memMB > 4000)
 //        {
-//            QByteArray stopcmd=QByteArray::fromHex("535458");
-//            serialObj->writeData(stopcmd);
+//            saveLive=false;
 //            QMessageBox::warning(this,
 //                                 "Memory Warning",
-//                                 "Application memory usage is high.\n"
-//                                 "Please SAVE data and restart the application.");
+//                                 "Data saving is stopped due to memory limitation.");
 
-
-//            return;
 //        }
 
-        QMutexLocker locker(&dataMutex);
-        pending_sampleIndex += sampleIndex;
-        pending_xAdxl += xAdxl;
-        pending_yAdxl += yAdxl;
-        pending_zAdxl += zAdxl;
-        qDebug()<<"problem happened here";
+//        QMutexLocker locker(&dataMutex);
+//        pending_sampleIndex += sampleIndex;
+//        pending_xAdxl += xAdxl;
+//        pending_yAdxl += yAdxl;
+//        pending_zAdxl += zAdxl;
 
         // optionally keep full history for later export
         if(saveLive){
@@ -2649,8 +2647,19 @@ void MainWindow::makePacket4100AdxlLive(const QByteArray &rawPacket4100Adxl)
         full_zAdxl += zAdxl;
          }
 
-    qDebug() << "Total ADXL samples queued:" << pending_sampleIndex.size();
-
+        if (!ui->checkBox_fft->isChecked())
+        {
+            // time-domain
+            livePlot(ui->customPlot_adxl_x_live, sampleIndex, xAdxl,adxlWindow,0);
+            livePlot(ui->customPlot_adxl_y_live, sampleIndex, yAdxl,adxlWindow,0);
+            livePlot(ui->customPlot_adxl_z_live, sampleIndex, zAdxl,adxlWindow,0);
+        }
+        else
+        {
+            plotLiveFFT(xAdxl, adxlFreqL, ui->customPlot_adxl_x_live);
+            plotLiveFFT(yAdxl, adxlFreqL, ui->customPlot_adxl_y_live);
+            plotLiveFFT(zAdxl,adxlFreqL, ui->customPlot_adxl_z_live);
+        }
 
     qDebug() << "Total ADXL samples:" << sampleIndex.size();
 }
@@ -2725,40 +2734,28 @@ void MainWindow::makePacket4100InclLive(const QByteArray &rawPacket4100Incl)
     livePlot(ui->customPlot_incl_x_live, sampleIndex, inclXL,inclWindow,0);
     livePlot(ui->customPlot_incl_x_live, sampleIndex, inclYL,inclWindow,1);
 }
-void MainWindow::onUiUpdateTimer()
-{
-    if (!livePlotEnabled) return; // respect live toggle; skip plotting
+//void MainWindow::onUiUpdateTimer()
+//{
+//    if (!livePlotEnabled) return; // respect live toggle; skip plotting
 
-    // Grab pending data atomically
-    QVector<double> sIdx, x, y, z;
-    {
-        QMutexLocker locker(&dataMutex);
-        if (pending_sampleIndex.isEmpty()) return;
-        sIdx = pending_sampleIndex; pending_sampleIndex.clear();
-        x = pending_xAdxl;
-        pending_xAdxl.clear();
-        y = pending_yAdxl;
-        pending_yAdxl.clear();
-        z = pending_zAdxl;
-        pending_zAdxl.clear();
+//    // Grab pending data atomically
+//    QVector<double> sIdx, x, y, z;
+//    {
+//        QMutexLocker locker(&dataMutex);
+//        if (pending_sampleIndex.isEmpty()) return;
+//        sIdx = pending_sampleIndex; pending_sampleIndex.clear();
+//        x = pending_xAdxl;
+//        pending_xAdxl.clear();
+//        y = pending_yAdxl;
+//        pending_yAdxl.clear();
+//        z = pending_zAdxl;
+//        pending_zAdxl.clear();
 
-    }
+//    }
 
     // Now update plots on GUI thread (one batch per timer tick)
-    if (!ui->checkBox_fft->isChecked())
-    {
-        // time-domain
-        livePlot(ui->customPlot_adxl_x_live, sIdx, x,adxlWindow,0);
-        livePlot(ui->customPlot_adxl_y_live, sIdx, y,adxlWindow,0);
-        livePlot(ui->customPlot_adxl_z_live, sIdx, z,adxlWindow,0);
-    }
-    else
-    {
-        plotLiveFFT(x, adxlFreqL, ui->customPlot_adxl_x_live);
-        plotLiveFFT(y, adxlFreqL, ui->customPlot_adxl_y_live);
-        plotLiveFFT(z, adxlFreqL, ui->customPlot_adxl_z_live);
-    }
-}
+
+//}
 void MainWindow::livePlot(QCustomPlot *plot,
                           const QVector<double> &xValues,
                           const QVector<double> &yValues,
@@ -2903,12 +2900,14 @@ void MainWindow::on_checkBox_livePlot_stateChanged(int arg1)
 
 void MainWindow::on_pushButton_stopLivePlot_clicked()
 {
-    responseTimer->start(2000);
+
     ui->tabWidget->tabBar()->setEnabled(true);
+    responseTimer->start(2000);
 
-    QByteArray stopPlot = QByteArray::fromHex("535458");
-
+    QByteArray stopPlot = QByteArray::fromHex("535458");  
     writeToNotes("stop command send:"+stopPlot.toHex(' ').toUpper());
+
+
     emit sendMsgId(0x11);
     serialObj->writeData(stopPlot);
 
@@ -2919,17 +2918,21 @@ void MainWindow::on_pushButton_stopLivePlot_clicked()
 
      saveLive=false;
 
-
-     (!full_xAdxl.isEmpty()&&
-      !full_yAdxl.isEmpty()&&
-      !full_zAdxl.isEmpty()&&
-      !fullInclXL.isEmpty()&&
-      !fullInclYL.isEmpty())?
-       saveLiveData(full_xAdxl,full_yAdxl,full_zAdxl,
-                    fullInclXL,fullInclYL):
-                (void)QMessageBox::warning(this,"No Data","No data to save");
-
-
+     QTimer::singleShot(50, this, [this]() {
+         if (!full_xAdxl.isEmpty() &&
+             !full_yAdxl.isEmpty() &&
+             !full_zAdxl.isEmpty() &&
+             !fullInclXL.isEmpty() &&
+             !fullInclYL.isEmpty())
+         {
+             saveLiveData(full_xAdxl, full_yAdxl, full_zAdxl,
+                          fullInclXL, fullInclYL);
+         }
+         else
+         {
+             QMessageBox::warning(this, "No Data", "No data to save");
+         }
+     });
 }
 
 void MainWindow::saveLiveData(const QVector<double> &xAdxl,
@@ -3062,10 +3065,13 @@ void MainWindow::on_pushButton_saveLive_clicked()
 {
 
         saveLive = true;
-        if (saveLive)
-        {
-            saveLimitTimer->start(420000);
+        if (!saveLimitTimer->isActive()) {
+            saveLimitTimer->start(480000);
+            qDebug() << "Timer started.";
+        } else {
+            qDebug() << "Timer already running. Not restarting.";
         }
+
 
 }
 void MainWindow::on_pushButton_startLive_clicked()

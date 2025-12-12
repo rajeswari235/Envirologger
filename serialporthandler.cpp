@@ -124,8 +124,8 @@ void serialPortHandler::readData()
         if (!buffer.isEmpty())
         {
             emit dataReceived();
-
-            }
+            executeWriteToNotes("data Received:"+buffer.toHex());
+        }
     }
     else
     {
@@ -454,31 +454,30 @@ void serialPortHandler::readData()
                 executeWriteToNotes("Start Log Initial cmd received");
 
             }
-            qDebug()<<"2";
 
-            if (buffer.startsWith(START_LOG_INIT))
+            else if (buffer.startsWith(START_LOG_INIT))
             {
                 ResponseData = START_LOG_INIT;
                 buffer.remove(0, START_LOG_INIT.size());
                 powerId = 0x02;
 
                 executeWriteToNotes("Start Log Initial cmd received");
-                return;
+
             }
 
             // ---------------- START LOG END ----------------
-            if (buffer.startsWith(START_LOG_END))
+            else if (buffer.startsWith(START_LOG_END))
             {
                 ResponseData = START_LOG_END;
                 buffer.remove(0, START_LOG_END.size());
                 powerId = 0x02;
 
                 executeWriteToNotes("Start Log End cmd received");
-                return;
+
             }
 
             // ---------------- LIVE FREQ PACKET ----------------
-            if (buffer.startsWith(LIVE_HEADER))
+            else if (buffer.startsWith(LIVE_HEADER))
             {
                 int footerPos = buffer.indexOf(LIVE_FOOTER, LIVE_HEADER.size());
                 if (footerPos < 0) return;   // WAIT FOR FULL PACKET
@@ -495,7 +494,7 @@ void serialPortHandler::readData()
             }
 
             // ---------------- ADXL PACKET ----------------
-            if (buffer.startsWith(ADXL_HEADER))
+            else if (buffer.startsWith(ADXL_HEADER))
             {
                 int footerPos = buffer.indexOf(ADXL_FOOTER, ADXL_HEADER.size());
                 if (footerPos < 0) return;  // WAIT FOR FULL PACKET
@@ -513,7 +512,7 @@ void serialPortHandler::readData()
             }
 
             // ---------------- INCL PACKET ----------------
-            if (buffer.startsWith(INCL_HEADER))
+            else if (buffer.startsWith(INCL_HEADER))
             {
                 int footerPos = buffer.indexOf(INCL_FOOTER, INCL_HEADER.size());
                 if (footerPos < 0) return;  // WAIT FOR FULL PACKET
@@ -526,6 +525,14 @@ void serialPortHandler::readData()
 
                 executeWriteToNotes("Incl Packet: size = "
                                     + QString::number(ResponseData.size()));
+
+
+            }
+            else{
+                executeWriteToNotes("The Packet:"
+                                    + buffer.toHex(' ').toUpper());
+                executeWriteToNotes("Live Data with Invalid Header");
+                buffer.clear();
 
 
             }

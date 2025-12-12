@@ -189,7 +189,7 @@ private slots:
        void on_checkBox_livePlot_stateChanged(int arg1);
 
        void on_pushButton_stopLivePlot_clicked();
-       void onUiUpdateTimer();
+       //void onUiUpdateTimer();
 
        void saveLiveData(const QVector<double> &xAdxl,
                                                const QVector<double> &yAdxl,
@@ -206,6 +206,8 @@ private slots:
 
 signals:
     void sendMsgId(quint8 id);
+    void memoryWarning();
+
 
 private:
     Ui::MainWindow *ui;
@@ -282,7 +284,7 @@ private:
 
      // flags and tuning
      bool livePlotEnabled;   // controlled by your livePlot checkbox
-     int uiUpdateIntervalMs =50;
+     int uiUpdateIntervalMs =33;
 
      quint16 adxlFreqL;
      quint16 inclFreqL;
